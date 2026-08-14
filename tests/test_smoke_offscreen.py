@@ -139,6 +139,21 @@ def _verify_snapshot_ui() -> None:
     os.environ.pop("HOTKEY_DETECTOR_HOME", None)
 
 
+def _verify_recommend_ui() -> None:
+    """推荐 UI:RecommendDialog 构建并正确筛选空闲组合(构造数据)。"""
+    from core import HotkeyCombo, HotkeyResult, HotkeyStatus  # noqa: E402
+    from ui.recommend_dialog import RecommendDialog  # noqa: E402
+
+    results = [
+        HotkeyResult(HotkeyCombo(3, 0x41), HotkeyStatus.FREE),     # Ctrl+Alt+A 空闲
+        HotkeyResult(HotkeyCombo(8, 0x44), HotkeyStatus.SYSTEM),   # Win+D 占用
+    ]
+    dlg = RecommendDialog(results)
+    assert dlg._rec, "应筛出空闲组合"
+    assert dlg._rec[0].name == "Ctrl+Alt+A", f"首推应为 Ctrl+Alt+A,实际 {dlg._rec[0].name}"
+    print(f"[OK] 推荐 UI: RecommendDialog 构建,首推 {dlg._rec[0].name}")
+
+
 def main() -> int:
     # import 放进函数内:即使 import 阶段失败,外层 try 也能捕获并输出诊断
     from PySide6 import QtCore, QtWidgets  # noqa: E402
@@ -189,6 +204,7 @@ def main() -> int:
     _verify_error_codes()
     _verify_resume()
     _verify_snapshot_ui()
+    _verify_recommend_ui()
 
     print("[OK] 冒烟测试全部通过")
     return 0

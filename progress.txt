@@ -59,3 +59,7 @@
   bug 修复:snapshot.save 同秒覆盖(时间戳精度到秒,快速连点会覆盖)→ 同名追加序号 _2/_3
 
 下一个迭代：US-010 HTML 导出 + 空闲推荐 UI
+
+[US-010] done — ui/recommend_dialog.py(推荐对话框+复制)+ main_window 加 HTML导出/推荐按钮;smoke 加 _verify_recommend_ui
+
+下一个迭代：US-011 前台应用上下文 UI(状态栏定时刷新)

@@ -144,7 +144,7 @@
       "title": "HTML 导出 + 空闲推荐 UI（工具栏按钮 + 推荐对话框）",
       "description": "工具栏新增「📄 导出 HTML」「💡 推荐可用」按钮。导出 HTML 调 core.report.write_html 保存文件；推荐可用打开对话框展示 core.recommend 推荐的空闲组合，支持复制。",
       "priority": 10,
-      "passes": false,
+      "passes": true,
       "acceptanceCriteria": [
         "导出 HTML 按钮在没有结果时提示先扫描，有结果时弹保存对话框写出 HTML 并提示成功",
         "ui/recommend_dialog.py 展示推荐空闲组合列表，无空闲项时提示，有项时支持复制到剪贴板",

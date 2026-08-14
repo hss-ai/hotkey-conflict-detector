@@ -28,8 +28,10 @@ from core.hotkeys import (
     vk_name,
 )
 from core import snapshot as snap
+from core.report import write_html
 
 from .detail_dialog import DetailDialog
+from .recommend_dialog import RecommendDialog
 from .snapshot_dialog import SnapshotCompareDialog
 from .models import COL_STATUS, SCOPE_LABEL, HotkeyFilterProxy, HotkeyTableModel
 from .style import QSS, STATUS_COLORS, status_color
@@ -161,12 +163,15 @@ class MainWindow(QtWidgets.QMainWindow):
         self._btn_copy = self._mkbtn("📋 复制冲突")
         self._btn_snapshot_save = self._mkbtn("📁 存快照")
         self._btn_snapshot_diff = self._mkbtn("📊 对比快照")
+        self._btn_export_html = self._mkbtn("📄 导出 HTML")
+        self._btn_recommend = self._mkbtn("💡 推荐可用")
         self._btn_about = self._mkbtn("关于")
 
         for b in (
             self._btn_scan, self._btn_stop, self._btn_clear,
             self._btn_export, self._btn_copy,
             self._btn_snapshot_save, self._btn_snapshot_diff,
+            self._btn_export_html, self._btn_recommend,
             self._btn_about,
         ):
             bar.addWidget(b)
@@ -365,6 +370,8 @@ class MainWindow(QtWidgets.QMainWindow):
         self._btn_copy.clicked.connect(self.copy_conflicts)
         self._btn_snapshot_save.clicked.connect(self.save_snapshot)
         self._btn_snapshot_diff.clicked.connect(self.show_snapshot_compare)
+        self._btn_export_html.clicked.connect(self.export_html)
+        self._btn_recommend.clicked.connect(self.show_recommend)
         self._btn_about.clicked.connect(self.about)
         self._table.doubleClicked.connect(self._show_detail)
 
@@ -676,6 +683,30 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def show_snapshot_compare(self) -> None:
         SnapshotCompareDialog(self).exec()
+
+    # ------------------------------------------------------------------
+    # HTML 报告 / 空闲推荐
+    # ------------------------------------------------------------------
+    def export_html(self) -> None:
+        results = self._model.all_results()
+        if not results:
+            QtWidgets.QMessageBox.information(self, "导出 HTML", "当前没有扫描结果,请先扫描。")
+            return
+        path, _ = QtWidgets.QFileDialog.getSaveFileName(
+            self, "导出为 HTML", "hotkey_report.html", "HTML 文件 (*.html)"
+        )
+        if not path:
+            return
+        try:
+            write_html(path, results, meta={"label": "扫描报告"})
+        except OSError as e:  # noqa: BLE001
+            QtWidgets.QMessageBox.warning(self, "导出失败", str(e))
+            return
+        QtWidgets.QMessageBox.information(self, "导出成功", f"已导出 HTML 报告:\n{path}")
+        self._sb_status.setText(f"HTML 报告已导出")
+
+    def show_recommend(self) -> None:
+        RecommendDialog(self._model.all_results(), self).exec()
 
     # ------------------------------------------------------------------
     # 其他
