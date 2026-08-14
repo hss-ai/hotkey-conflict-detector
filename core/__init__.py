@@ -1,7 +1,7 @@
 """全局热键冲突检测工具 - 核心检测模块。
 
-导入本包即自动把 `apps.guess_source` 注入为 detector 的来源推断钩子,
-使扫描到的"已占用"组合能附带推测来源。
+detector 直接调用 apps 构建来源证据链(进程缓存 + 已知热键库),
+扫描前由 detector 自动 refresh 进程缓存。
 """
 
 from .hotkeys import (
@@ -26,18 +26,20 @@ from .detector import (
     ScanThread,
     probe,
     is_hotkey_occupied,
-    set_source_guesser,
+    quick_probe,
 )
 from . import apps
 from .apps import (
     KNOWN_APPS,
     KNOWN_HOTKEYS,
+    KnownApp,
+    KnownHotkey,
+    Evidence,
     scan_running_hotkey_apps,
+    build_evidence,
     guess_source,
+    refresh_running_processes,
 )
-
-# 自动注入来源推断钩子
-set_source_guesser(guess_source)
 
 __all__ = [
     # hotkeys
@@ -61,11 +63,16 @@ __all__ = [
     "ScanThread",
     "probe",
     "is_hotkey_occupied",
-    "set_source_guesser",
+    "quick_probe",
     # apps
     "apps",
     "KNOWN_APPS",
     "KNOWN_HOTKEYS",
+    "KnownApp",
+    "KnownHotkey",
+    "Evidence",
     "scan_running_hotkey_apps",
+    "build_evidence",
     "guess_source",
+    "refresh_running_processes",
 ]

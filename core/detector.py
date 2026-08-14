@@ -22,6 +22,7 @@ from typing import Callable, Optional
 from PySide6 import QtCore
 
 from .hotkeys import HotkeyCombo, SYSTEM_RESERVED
+from .apps import build_evidence as _build_evidence, refresh_running_processes
 
 
 # ---------------------------------------------------------------------------
@@ -77,7 +78,8 @@ class HotkeyResult:
 
     combo: HotkeyCombo
     status: HotkeyStatus
-    source: str = ""  # 推断的占用来源(可能为空)
+    source: str = ""        # 推断的占用来源(可能为空)
+    evidence: object = None  # apps.Evidence 或 None(详情面板用)
 
     @property
     def name(self) -> str:
@@ -143,47 +145,30 @@ def is_hotkey_occupied(modifiers: int, vk: int) -> bool:
     return probe(modifiers, vk).is_conflict
 
 
+def quick_probe(modifiers: int, vk: int) -> HotkeyResult:
+    """单次探测一个组合,返回完整 HotkeyResult(含证据链)。供「单点检测」用。"""
+    refresh_running_processes()
+    ok, err = _probe_raw(modifiers, vk)
+    status = _classify(ok, err)
+    source, evidence = _resolve_source(status, err, HotkeyCombo(modifiers, vk))
+    return HotkeyResult(combo=HotkeyCombo(modifiers, vk), status=status, source=source, evidence=evidence)
+
+
 # ---------------------------------------------------------------------------
-# 来源推断钩子(由 core.apps 注入,避免循环依赖)
+# 来源证据链(直接调 core.apps,无循环依赖)
 # ---------------------------------------------------------------------------
-SourceGuesser = Callable[[HotkeyCombo], str]
-_source_guesser: Optional[SourceGuesser] = None
-
-
-def set_source_guesser(fn: Optional[SourceGuesser]) -> None:
-    """注入来源推断函数(探测到 OCCUPIED 时调用)。"""
-    global _source_guesser
-    _source_guesser = fn
-
-
-def _guess_source(combo: HotkeyCombo) -> str:
-    if _source_guesser is None:
-        return ""
-    try:
-        return _source_guesser(combo) or ""
-    except Exception:
-        return ""
-
-
-def _build_source(status: HotkeyStatus, err: int, combo: HotkeyCombo) -> str:
-    """根据状态推断占用来源(尽力而为)。
-
-    重要:RegisterHotKey 失败时**统一返回 1409**,无法据此区分"被程序注册 /
-    系统保留 / 被键盘钩子占用"——这三类都返回 1409。因此:
-    - SYSTEM(命中硬编码系统表)→ 明确"Windows 系统保留";
-    - OCCUPIED → 优先用已知热键库(_guess_source)推测;推测不出就给中性诚实文案,
-      不编造具体占用机制。
-    """
+def _resolve_source(status: HotkeyStatus, err: int, combo: HotkeyCombo) -> tuple[str, object]:
+    """返回 (来源文本, 证据链对象)。证据链仅 OCCUPIED 且匹配已知热键时有。"""
     if status == HotkeyStatus.SYSTEM:
-        return "Windows 系统保留"
+        return "Windows 系统保留", None
     if status == HotkeyStatus.OCCUPIED:
-        known = _guess_source(combo)
-        if known:
-            return known
-        return "无法注册(已被程序/系统/钩子占用,Windows 不提供具体来源)"
+        ev = _build_evidence(combo)
+        if ev:
+            return ev.summary, ev
+        return "无法注册(已被程序/系统/钩子占用,Windows 不提供具体来源)", None
     if status == HotkeyStatus.ERROR:
-        return f"探测失败(错误码 {err})"
-    return ""
+        return f"探测失败(错误码 {err})", None
+    return "", None
 
 
 # ---------------------------------------------------------------------------
@@ -211,6 +196,7 @@ class ScanThread(QtCore.QThread):
     def run(self) -> None:  # noqa: D401 - QThread 入口
         total = len(self._combos)
         stats = {"free": 0, "occupied": 0, "system": 0, "error": 0, "skipped": 0}
+        refresh_running_processes()  # 刷新进程缓存,供证据链判断"app 是否运行"
 
         for i, combo in enumerate(self._combos):
             if self._stop_flag:
@@ -218,8 +204,8 @@ class ScanThread(QtCore.QThread):
 
             ok, err = _probe_raw(combo.modifiers, combo.vk)
             status = _classify(ok, err)
-            source = _build_source(status, err, combo)
-            result = HotkeyResult(combo=combo, status=status, source=source)
+            source, evidence = _resolve_source(status, err, combo)
+            result = HotkeyResult(combo=combo, status=status, source=source, evidence=evidence)
             self.result_ready.emit(result)
 
             key = status.value
@@ -240,7 +226,7 @@ __all__ = [
     "ScanThread",
     "probe",
     "is_hotkey_occupied",
-    "set_source_guesser",
+    "quick_probe",
 ]
 
 
@@ -252,10 +238,11 @@ class HotkeyDetector:
         self._combos = combos
 
     def scan(self) -> list[HotkeyResult]:
+        refresh_running_processes()
         results: list[HotkeyResult] = []
         for c in self._combos:
             ok, err = _probe_raw(c.modifiers, c.vk)
             status = _classify(ok, err)
-            source = _build_source(status, err, c)
-            results.append(HotkeyResult(combo=c, status=status, source=source))
+            source, evidence = _resolve_source(status, err, c)
+            results.append(HotkeyResult(combo=c, status=status, source=source, evidence=evidence))
         return results

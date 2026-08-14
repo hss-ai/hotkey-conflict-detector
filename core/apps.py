@@ -72,19 +72,53 @@ KNOWN_APPS: tuple[KnownApp, ...] = (
 # 已知默认热键:(modifiers, vk) → 候选来源描述
 # 多个软件可能用同一组合时,都列出。键名仅供参考。
 # ---------------------------------------------------------------------------
-KNOWN_HOTKEYS: dict[tuple[int, int], tuple[str, ...]] = {
-    (MOD_CONTROL | MOD_ALT, 0x41): ("QQ 截图(默认 Ctrl+Alt+A)",),
-    (MOD_ALT, 0x41): ("微信/企业微信 截图(默认 Alt+A)",),
-    (MOD_CONTROL | MOD_SHIFT, 0x41): ("钉钉 截图(默认 Ctrl+Shift+A)",),
-    (MOD_WIN | MOD_SHIFT, 0x53): ("Windows 截图工具(Win+Shift+S)",),
-    (MOD_ALT, 0x20): ("PowerToys Run / Flow Launcher / uTools(默认 Alt+Space)",),
-    (MOD_CONTROL | MOD_ALT, 0x55): ("uTools 超级面板(默认 Ctrl+Alt+U)",),
-    (MOD_CONTROL, 0xC0): ("Ditto 剪贴板(默认 Ctrl+`)",),
-    (MOD_CONTROL | MOD_ALT, 0x44): ("网易有道词典 划词(默认 Ctrl+Alt+D)",),
-    (MOD_ALT, 0x4A): ("Jietu/截图 默认(Alt+J)",),
-    (MOD_WIN | MOD_SHIFT, 0x46): ("Snipaste 截图(可设 Win+Shift+F)",),
-    (MOD_CONTROL | MOD_SHIFT | MOD_ALT, 0x53): ("ShareX 截图(默认 Ctrl+Shift+Alt+S)",),
+@dataclass(frozen=True)
+class KnownHotkey:
+    """一条已知软件默认热键记录。"""
+
+    app: str                    # 展示名
+    action: str                 # 功能描述
+    processes: tuple[str, ...]  # 判断"是否在运行"用的进程名(小写)
+
+
+# 已知软件的默认全局热键 → 应用记录(用于来源证据链推断)
+# 注意:这是"默认值",用户可能改过;仅作排障参考。
+KNOWN_HOTKEYS: dict[tuple[int, int], tuple[KnownHotkey, ...]] = {
+    (MOD_CONTROL | MOD_ALT, 0x41): (KnownHotkey("QQ", "截图", ("qq.exe",)),),
+    (MOD_ALT, 0x41): (
+        KnownHotkey("微信", "截图", ("wechat.exe",)),
+        KnownHotkey("企业微信", "截图", ("wxwork.exe",)),
+    ),
+    (MOD_CONTROL | MOD_SHIFT, 0x41): (KnownHotkey("钉钉", "截图", ("dingtalk.exe", "dingtalklauncher.exe")),),
+    (MOD_WIN | MOD_SHIFT, 0x53): (KnownHotkey("Windows 截图工具", "截图", ("snippingtool.exe", "screenclippinghost.exe")),),
+    (MOD_ALT, 0x20): (
+        KnownHotkey("PowerToys Run", "启动器", ("powerlauncher.exe", "powertoys.exe")),
+        KnownHotkey("Flow Launcher", "启动器", ("flow.launcher.exe",)),
+        KnownHotkey("uTools", "启动器", ("utools.exe",)),
+    ),
+    (MOD_CONTROL | MOD_ALT, 0x55): (KnownHotkey("uTools", "超级面板", ("utools.exe",)),),
+    (MOD_CONTROL, 0xC0): (KnownHotkey("Ditto", "剪贴板", ("ditto.exe",)),),
+    (MOD_CONTROL | MOD_ALT, 0x44): (KnownHotkey("网易有道词典", "划词", ("youdaodict.exe",)),),
+    (MOD_WIN | MOD_SHIFT, 0x46): (KnownHotkey("Snipaste", "截图", ("snipaste.exe",)),),
+    (MOD_CONTROL | MOD_SHIFT | MOD_ALT, 0x53): (KnownHotkey("ShareX", "截图", ("sharex.exe",)),),
 }
+
+
+@dataclass
+class Evidence:
+    """单条占用来源的证据链 + 置信度。"""
+
+    app: str                       # 主来源(应用名)
+    action: str                    # 功能
+    checks: list[tuple[str, str]]  # (检查项, 符号 ✓/△/✗/?)
+    stars: int                     # 0-5
+    confidence: str                # 高/中/低
+
+    @property
+    def summary(self) -> str:
+        """表格/列表用的一句话摘要。"""
+        star = "★" * self.stars + "☆" * (5 - self.stars)
+        return f"可能来自:{self.app}{self.action}(置信度{self.confidence} {star})"
 
 
 # ---------------------------------------------------------------------------
@@ -147,9 +181,20 @@ class RunningApp:
         return f"{self.name} ({self.matched})"
 
 
+# 当前运行进程缓存(build_evidence 判断"app 是否运行"用;扫描前 refresh 一次)
+_running_processes: set[str] = set()
+
+
+def refresh_running_processes() -> set[str]:
+    """刷新进程缓存,返回当前所有进程名集合(小写)。"""
+    global _running_processes
+    _running_processes = list_process_names()
+    return _running_processes
+
+
 def scan_running_hotkey_apps() -> list[RunningApp]:
-    """扫描正在运行的、已知会注册全局热键的软件。"""
-    running = list_process_names()
+    """扫描正在运行的、已知会注册全局热键的软件(顺带刷新进程缓存)。"""
+    running = refresh_running_processes()
     found: list[RunningApp] = []
     seen: set[str] = set()
     for app in KNOWN_APPS:
@@ -162,15 +207,34 @@ def scan_running_hotkey_apps() -> list[RunningApp]:
 
 
 # ---------------------------------------------------------------------------
-# 单组合来源推断(注入到 detector 作为 source guesser)
+# 单组合来源证据链
 # ---------------------------------------------------------------------------
+def build_evidence(combo: HotkeyCombo) -> Evidence | None:
+    """对某个被占用的组合,构建来源证据链(尽力而为)。
+
+    置信度依据:命中已知默认热键(★2)+ 该软件进程在运行(★2)+ 探测到注册失败(★1)。
+    Windows 不提供"哪个进程占用"的 API,故即便全部命中也只能到 5★,无法"已确认"。
+    """
+    matches = KNOWN_HOTKEYS.get((combo.modifiers, combo.vk))
+    if not matches:
+        return None
+    kh = matches[0]  # 多候选时取首个,详情面板可展开全部
+    running = any(p in _running_processes for p in kh.processes)
+    checks: list[tuple[str, str]] = [
+        (f"{kh.app} 进程{'在运行' if running else '未检测到'}", "✓" if running else "△"),
+        (f"命中 {kh.app} 默认热键", "✓"),
+        ("RegisterHotKey 注册失败(本工具探测)", "✓"),
+        ("API 直接确认归属", "✗ Windows 不支持"),
+    ]
+    stars = (2 if running else 0) + 2 + 1  # 最多 5
+    confidence = "高" if stars >= 5 else "中" if stars >= 3 else "低"
+    return Evidence(app=kh.app, action=kh.action, checks=checks, stars=stars, confidence=confidence)
+
+
 def guess_source(combo: HotkeyCombo) -> str:
-    """对某个被占用的组合,尽力推断来源。"""
-    key = (combo.modifiers, combo.vk)
-    if key in KNOWN_HOTKEYS:
-        candidates = KNOWN_HOTKEYS[key]
-        return "可能来自:" + " / ".join(candidates)
-    return ""
+    """对某个被占用的组合,返回来源摘要(兼容旧接口)。"""
+    ev = build_evidence(combo)
+    return ev.summary if ev else ""
 
 
 # ---------------------------------------------------------------------------
@@ -185,9 +249,13 @@ __all__ = [
     "KNOWN_APPS",
     "KNOWN_HOTKEYS",
     "KnownApp",
+    "KnownHotkey",
     "RunningApp",
+    "Evidence",
     "list_process_names",
+    "refresh_running_processes",
     "scan_running_hotkey_apps",
+    "build_evidence",
     "guess_source",
     "dump_running_apps",
 ]

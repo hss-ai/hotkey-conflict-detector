@@ -15,12 +15,22 @@ from core import (
     HotkeyStatus,
     ScanThread,
     generate_combos,
+    quick_probe,
     scan_running_hotkey_apps,
 )
-from core.hotkeys import modifier_name, vk_name
+from core.hotkeys import (
+    MOD_ALT,
+    MOD_CONTROL,
+    MOD_SHIFT,
+    MOD_WIN,
+    format_combo,
+    modifier_name,
+    vk_name,
+)
 
-from .models import COL_STATUS, HotkeyFilterProxy, HotkeyTableModel
-from .style import QSS, STATUS_COLORS
+from .detail_dialog import DetailDialog
+from .models import COL_STATUS, SCOPE_LABEL, HotkeyFilterProxy, HotkeyTableModel
+from .style import QSS, STATUS_COLORS, status_color
 
 # 统计项定义:(key, 标题, 颜色)
 _STAT_ITEMS = (
@@ -39,6 +49,48 @@ _STATUS_LABELS = (
     ("系统保留", HotkeyStatus.SYSTEM),
     ("异常", HotkeyStatus.ERROR),
 )
+
+
+class HotkeyCaptureEdit(QtWidgets.QLineEdit):
+    """聚焦后按下组合键自动捕获,显示并存储 (modifiers, vk)。
+
+    用 QKeyEvent.nativeVirtualKey() 取原生 Win32 虚拟键码,避开 Qt::Key 与 VK 的差异。
+    """
+
+    combo_captured = QtCore.Signal(int, int)
+
+    def __init__(self, parent: QtWidgets.QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.setReadOnly(True)  # 只捕获按键,不允许手输文字
+        self.setPlaceholderText("点此聚焦,然后按下要检测的热键(如 Ctrl+Alt+J)…")
+        self._mods = 0
+        self._vk = 0
+
+    def keyPressEvent(self, event: QtGui.QKeyEvent) -> None:  # noqa: N802
+        key = event.key()
+        if key in (
+            QtCore.Qt.Key_Control, QtCore.Qt.Key_Alt, QtCore.Qt.Key_Shift,
+            QtCore.Qt.Key_Meta, QtCore.Qt.Key_AltGr,
+        ):
+            return  # 单独按修饰键不触发捕获
+        vk = event.nativeVirtualKey()
+        if not vk:
+            return
+        mods = 0
+        m = event.modifiers()
+        if m & QtCore.Qt.ControlModifier:
+            mods |= MOD_CONTROL
+        if m & QtCore.Qt.AltModifier:
+            mods |= MOD_ALT
+        if m & QtCore.Qt.ShiftModifier:
+            mods |= MOD_SHIFT
+        if m & QtCore.Qt.MetaModifier:
+            mods |= MOD_WIN
+        if mods == 0:
+            return
+        self._mods, self._vk = mods, vk
+        self.setText(format_combo(mods, vk))
+        self.combo_captured.emit(mods, vk)
 
 
 class MainWindow(QtWidgets.QMainWindow):
@@ -79,6 +131,7 @@ class MainWindow(QtWidgets.QMainWindow):
         root.setSpacing(10)
 
         root.addLayout(self._build_toolbar())
+        root.addWidget(self._build_quick_bar())
         root.addWidget(self._build_settings_panel())
         root.addWidget(self._build_stats_bar())
         root.addWidget(self._build_progress())
@@ -118,6 +171,29 @@ class MainWindow(QtWidgets.QMainWindow):
         elif danger:
             b.setObjectName("danger")
         return b
+
+    def _build_quick_bar(self) -> QtWidgets.QFrame:
+        """单点检测条:按下热键自动探测这一个组合,无需全量扫描。"""
+        frame = QtWidgets.QFrame()
+        frame.setStyleSheet("QFrame{background:#ffffff;border:1px solid #e3e7ec;border-radius:8px;}")
+        h = QtWidgets.QHBoxLayout(frame)
+        h.setContentsMargins(12, 8, 12, 8)
+        h.setSpacing(8)
+        h.addWidget(QtWidgets.QLabel("🔍 单点检测"))
+        self._capture = HotkeyCaptureEdit()
+        self._capture.setFixedHeight(30)
+        self._capture.combo_captured.connect(self._quick_check)
+        h.addWidget(self._capture, 1)
+        self._btn_quick_detail = QtWidgets.QPushButton("查看详情")
+        self._btn_quick_detail.setEnabled(False)
+        self._btn_quick_detail.clicked.connect(self._show_quick_detail)
+        h.addWidget(self._btn_quick_detail)
+        self._quick_result = QtWidgets.QLabel("按下热键后自动检测…")
+        self._quick_result.setMinimumWidth(220)
+        self._quick_result.setWordWrap(True)
+        self._quick_result.setStyleSheet("color:#6b7480;")
+        h.addWidget(self._quick_result, 1)
+        return frame
 
     def _build_settings_panel(self) -> QtWidgets.QGroupBox:
         box = QtWidgets.QGroupBox("扫描范围")
@@ -280,6 +356,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self._btn_export.clicked.connect(self.export_csv)
         self._btn_copy.clicked.connect(self.copy_conflicts)
         self._btn_about.clicked.connect(self.about)
+        self._table.doubleClicked.connect(self._show_detail)
 
         self._combo_status.currentIndexChanged.connect(self._apply_filters)
         self._cb_conflict_only.toggled.connect(self._apply_filters)
@@ -455,6 +532,40 @@ class MainWindow(QtWidgets.QMainWindow):
         else:
             self._sb_apps.setText("🖥 未检测到已知热键软件")
             self._sb_apps.setToolTip("")
+
+    # ------------------------------------------------------------------
+    # 单点检测 / 详情面板
+    # ------------------------------------------------------------------
+    def _quick_check(self, modifiers: int, vk: int) -> None:
+        """单点检测:探测一个组合并显示结果(捕获框按下热键后触发)。"""
+        try:
+            result = quick_probe(modifiers, vk)
+        except Exception as e:  # noqa: BLE001
+            self._quick_result.setText(f"<span style='color:#dc2626'>检测失败:{e}</span>")
+            self._btn_quick_detail.setEnabled(False)
+            return
+        self._last_quick = result
+        fg, _ = status_color(result.status.value)
+        scope = SCOPE_LABEL.get(result.status, "")
+        scope_txt = f"　·　{scope}" if scope else ""
+        src = f"　·　{result.source}" if result.source else ""
+        self._quick_result.setText(
+            f"<span style='color:{fg};font-weight:600'>{result.status.label}</span>{scope_txt}{src}"
+        )
+        self._btn_quick_detail.setEnabled(True)
+
+    def _show_quick_detail(self) -> None:
+        r = getattr(self, "_last_quick", None)
+        if r is not None:
+            DetailDialog(r, self).exec()
+
+    def _show_detail(self, proxy_index: QtCore.QModelIndex) -> None:
+        """双击表格行 → 弹出详情诊断面板。"""
+        source_index = self._proxy.mapToSource(proxy_index)
+        if not source_index.isValid():
+            return
+        result = self._model.result_at(source_index.row())
+        DetailDialog(result, self).exec()
 
     # ------------------------------------------------------------------
     # 导出 / 复制
