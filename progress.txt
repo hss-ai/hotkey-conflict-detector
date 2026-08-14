@@ -77,3 +77,15 @@
 [US-013] done — smoke 加 _verify_core_modules(聚合 snapshot/recommend/report/watch);README 加 v1.1.0 新功能段落+项目结构+用户JSON格式;_version.py 1.0.0→1.1.0;全部 6 模块测试+smoke 绿
 
 下一个迭代：US-014 全量回归 + 合并 main + tag v1.1.0 发版
+
+[US-014] done — 全量回归(6 模块测试 + smoke + main.py 构建)全绿;feat ff-merge 到 main(54e4536..d738f0a);tag v1.1.0 打标+推送;push origin main + tag 成功 → release.yml 由 tag push 触发,GitHub Actions 异步构建 exe 并发 Release
+[LOOP 完成] 14/14 story 全部 passes=true。进入 Settle。
+
+== Settle 提炼(沉淀到 AGENTS.md) ==
+1. 测试约定:tests/test_xxx.py 可独立 `python` 运行,main() 返回 0/1,无需 pytest;纯逻辑测试 CI(Session0)可跑
+2. MOD 位掩码:MOD_ALT=1/MOD_CONTROL=2/MOD_SHIFT=4/MOD_WIN=8;6=Ctrl+Shift 非 Ctrl+Alt(曾踩坑)
+3. 零新依赖:Win32 一律 ctypes;配色从 ui/style.py 取不散落硬编码
+4. 版本/发版:core/_version.py 单点真源,tag vX.Y.Z 触发 release.yml 自动构建 exe
+5. 用户扩展:~/.hotkey_detector/user_hotkeys.json(HOTKEY_DETECTOR_HOME 可覆盖),与内置库合并
+6. 并发提交:本仓库有并发会话(友军 CI 优化)用 git add -A,需用具体文件 git add + 合并前 rebase 整理
+7. UI 对话框内联捕获框避免循环导入(watch_dialog 范例)
