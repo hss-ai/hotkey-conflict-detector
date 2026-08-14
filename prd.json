@@ -31,7 +31,7 @@
       "title": "已知热键库外部化：分离内置数据 + 用户可扩展 JSON",
       "description": "将 apps.py 中硬编码的 KNOWN_APPS/KNOWN_HOTKEYS 抽到独立模块 core/_known_data.py（仍是 Python 常量，避免 PyInstaller --add-data 打包风险），并新增用户扩展机制：读取 ~/.hotkey_detector/user_hotkeys.json 与内置库合并。apps.py 提供 load_merged_known_hotkeys()。",
       "priority": 2,
-      "passes": false,
+      "passes": true,
       "acceptanceCriteria": [
         "core/_known_data.py 存放内置 KNOWN_APPS / KNOWN_HOTKEYS，apps.py 从该模块导入",
         "apps.py 提供 load_user_hotkeys() 读用户目录 JSON + merge_known_hotkeys() 合并，用户目录不存在时优雅回退到纯内置",
@@ -46,7 +46,7 @@
       "title": "扫描快照模块 core/snapshot.py（序列化 + diff 纯逻辑）",
       "description": "新增 core/snapshot.py：把 list[HotkeyResult] 序列化为带元数据（时间戳、版本、扫描范围、统计）的 JSON；save/load 到 ~/.hotkey_detector/snapshots/；diff 两份快照返回新增占用/已释放/状态变化三类列表。纯逻辑，无 Qt 依赖。",
       "priority": 3,
-      "passes": false,
+      "passes": true,
       "acceptanceCriteria": [
         "snapshot.py 提供 to_dict(results, meta) / from_dict() / save(results, meta) / load(path) / diff(old, new)",
         "save 的 JSON 含 schema_version、created_at(ISO)、app_version、stats、results[]，每个 result 含 combo/modifiers/vk/status/source",

@@ -16,3 +16,17 @@
 - 提交信息 US-00X: <title>
 
 下一个迭代：US-001（最小热身，验证测试基线绿）
+
+[US-001] done — detector.py docstring 1419→1409 + _verify_error_codes 断言；commit 4cf5aa6
+[US-002] done — core/_known_data.py(内置数据+用户JSON加载/合并/解析) + apps.py 重构(build_evidence/scan_running_hotkey_apps 改用 merged_*) + tests/test_known_data.py 5 例全过；commit 98b75dc(被打包进友军 ci commit) + 588647c
+
+!! 并发干扰警告 !!
+检测到用户另一会话(友军)在并发提交本仓库,改 CI 诊断(ci.yml ::error:: annotation + test_smoke try/except 输出 GITHUB_OUTPUT)。
+友军用 git add -A,把我的 US-002 工作文件(_known_data.py/apps.py/test_known_data.py/prd.json/progress.txt)连同它自己的改动一起提交成 commit 98b75dc,message 是"ci: smoke test 诊断增强"——message 与内容不符。
+副作用:友军 test_smoke 基于更早状态,覆盖丢失了我 US-001 的 _verify_error_codes;已在 588647c 补回(保留友军的诊断增强版本)。
+教训:① 每个 story 完成立即提交,提交前先 git status 看友军是否有新改动;
+    ② 用具体文件 git add(不用 -A),减少互相卷入;
+    ③ 合并 main 前必须 git rebase 整理 commit(message 不准的 98b75dc 要拆分/修正);
+    ④ 友军改动是有益的(CI 诊断),保留不回滚。
+
+下一个迭代：US-003 快照模块 core/snapshot.py
