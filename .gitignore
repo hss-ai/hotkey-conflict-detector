@@ -1,0 +1,32 @@
+# Python 字节码 / 缓存
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# 打包产物
+build/
+dist/
+*.egg-info/
+*.egg
+
+# 虚拟环境
+venv/
+.venv/
+env/
+ENV/
+
+# IDE / 编辑器
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# 操作系统
+Thumbs.db
+Desktop.ini
+.DS_Store
+
+# 日志 / 临时
+*.log
+*.tmp
