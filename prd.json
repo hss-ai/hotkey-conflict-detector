@@ -75,7 +75,7 @@
       "title": "空闲热键推荐逻辑 core/recommend.py + 单测",
       "description": "新增 core/recommend.py：从扫描结果筛 FREE 组合，按友好度排序（优先 Ctrl+Alt+字母，其次 Ctrl+Shift+字母，避开 Win/小键盘/多媒体），返回前 N 个推荐。",
       "priority": 5,
-      "passes": false,
+      "passes": true,
       "acceptanceCriteria": [
         "recommend.py 提供 recommend_free(results, top_n=12) -> list[HotkeyResult]",
         "排序：Ctrl+Alt+字母 > Ctrl+Shift+字母 > 含 Shift 的其他 > 其他修饰；字母优于数字/功能键；不含 Win 优先",

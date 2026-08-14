@@ -36,3 +36,7 @@
   调试教训:MOD 位掩码 MOD_ALT=1/MOD_CONTROL=2/MOD_SHIFT=4/MOD_WIN=8,6=Ctrl+Shift 非 Ctrl+Alt;测试期望组合名字符串要对齐真实位掩码。
 
 下一个迭代：US-005 空闲推荐逻辑 core/recommend.py
+
+[US-005] done — core/recommend.py(recommend_free 友好度排序)+ tests/test_recommend.py 4 例
+
+下一个迭代：US-006 前台窗口探测 core/foreground.py
