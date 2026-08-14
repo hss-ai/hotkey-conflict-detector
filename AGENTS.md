@@ -41,3 +41,4 @@ Windows 全局热键冲突检测器(Python 3.10+ / PySide6)。用 `RegisterHotKe
 - RegisterHotKey 失败统一返回 1409,**无法区分**被程序注册 / 系统保留 / `WH_KEYBOARD_LL` 钩子占用;来源靠 `core/apps.build_evidence` 尽力推断(置信度标注)。
 - 应用**内部**快捷键(Word 的 Ctrl+B)不占全局槽位,探测不到。
 - 管理员进程占用的热键,非管理员探测可能因 UIPI 误判空闲 → 建议以管理员身份运行。
+- **CI 冒烟测试受限于 Session 0**:GitHub-hosted Windows runner 无交互桌面,`import PySide6`/创建 `QApplication` 原生崩溃,本地无法复现。CI smoke job 设 `continue-on-error`(失败不阻塞),冒烟测试以本地 `QT_QPA_PLATFORM=offscreen python tests/test_smoke_offscreen.py` 为准。

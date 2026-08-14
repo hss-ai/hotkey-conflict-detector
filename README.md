@@ -222,6 +222,8 @@ $env:QT_QPA_PLATFORM="offscreen"; python tests/test_smoke_offscreen.py
 QT_QPA_PLATFORM=offscreen python tests/test_smoke_offscreen.py
 ```
 
+> ⚠️ **关于 CI**:GitHub-hosted 的 Windows runner 运行在 Session 0(无交互桌面),`import PySide6` / 创建 `QApplication` 会原生崩溃(进程在 Python 异常处理前被杀,本地无法复现)。因此 CI 的 smoke job 设为 `continue-on-error`——**冒烟测试请以本地运行为准**。
+
 本地打包 exe:
 
 ```bash
