@@ -98,6 +98,41 @@ python main.py
 </tr>
 </table>
 
+## 🆕 v1.1.0 新功能
+
+本版新增 7 项能力,让检测器从「一次性扫描」升级为「持续诊断 + 差异对比」:
+
+| 功能 | 说明 |
+|---|---|
+| **📁 快照对比** | 扫描后存快照;装软件前后各存一份,对比即知「谁抢了热键」——新增占用 / 已释放 / 状态变化三类 diff |
+| **📄 HTML 报告** | 一键导出自包含 HTML 报告(统计卡片 + 冲突表 + 来源 Top),可分享存档 |
+| **💡 推荐可用** | 扫描后正向推荐当前空闲、可安全使用的组合(按 `Ctrl+Alt+字母` 友好度排序) |
+| **🎯 前台应用上下文** | 状态栏实时显示当前焦点应用,已知热键软件红色高亮提醒 |
+| **⏱ 守望模式** | 对一个组合持续探测,记录状态时间线,捕捉「时好时坏」的间歇性占用及当时运行软件 |
+| **🔧 热键库可扩展** | 在 `~/.hotkey_detector/user_hotkeys.json` 追加自定义软件热键,证据链会一并考虑 |
+| **▶️ 扫描续扫** | 中途停止后,再次扫描可选「继续扫描剩余」而非重来 |
+
+<details>
+<summary>📖 用户热键库 JSON 格式(点击展开)</summary>
+
+在 `~/.hotkey_detector/user_hotkeys.json` 放置(目录不存在会自动创建,可用环境变量 `HOTKEY_DETECTOR_HOME` 覆盖位置):
+
+```json
+{
+  "apps": [
+    {"name": "我的软件", "processes": ["myapp.exe"]}
+  ],
+  "hotkeys": [
+    {"modifiers": ["Ctrl", "Alt"], "vk": 74, "app": "我的软件",
+     "action": "截图", "processes": ["myapp.exe"]}
+  ]
+}
+```
+
+`modifiers` 支持整数位掩码、`["Ctrl","Alt"]` 列表或 `"Ctrl+Alt"` 字符串;`vk` 是 Win32 虚拟键码(A=0x41、J=0x4A …)。文件损坏或缺失不影响内置库。
+
+</details>
+
 ## 📖 工作原理
 
 Windows **没有提供**"枚举所有已注册全局热键"的官方 API。但 `RegisterHotKey` 是全局唯一的——若某组合已被占用,再次注册会失败。本工具据此逐个组合试探(注册 → 立即注销):
@@ -152,18 +187,25 @@ hotkey-conflict-detector/
 ├── main.py                          # 入口
 ├── core/
 │   ├── _version.py                  # 版本号单点真源(与 git tag 对应)
+│   ├── _known_data.py               # 内置热键库 + 用户 JSON 扩展 [v1.1]
 │   ├── hotkeys.py                   # 修饰键 / 虚拟键码 / 组合生成 / 系统保留表
-│   ├── detector.py                  # RegisterHotKey 探测引擎 + QThread 扫描器
-│   └── apps.py                      # 进程扫描 + 已知热键来源推断
+│   ├── detector.py                  # RegisterHotKey 探测引擎 + QThread 扫描器(支持续扫)
+│   ├── apps.py                      # 进程扫描 + 已知热键来源推断
+│   ├── snapshot.py                  # 扫描快照:序列化 / save / load / diff [v1.1]
+│   ├── report.py                    # HTML 报告渲染 [v1.1]
+│   ├── recommend.py                 # 空闲热键推荐排序 [v1.1]
+│   ├── foreground.py                # 前台窗口进程探测 [v1.1]
+│   └── watch.py                     # 守望状态机 + 转变检测 [v1.1]
 ├── ui/
 │   ├── style.py                     # QSS 样式表与配色
 │   ├── models.py                    # 表格模型 + 筛选代理
 │   ├── detail_dialog.py             # 详情诊断面板
 │   ├── locate_dialog.py             # 来源定位助手(二分定位法)
+│   ├── snapshot_dialog.py           # 快照对比对话框 [v1.1]
+│   ├── recommend_dialog.py          # 空闲推荐对话框 [v1.1]
+│   ├── watch_dialog.py              # 守望模式对话框 [v1.1]
 │   └── main_window.py               # 主窗口
-├── tests/
-│   ├── test_smoke_offscreen.py      # 离屏冒烟测试(CI 友好)
-│   └── capture_preview.py           # 开发用:启动 + 截图
+├── tests/                           # 各模块独立单测 + offscreen 冒烟(CI 友好)
 ├── .github/workflows/               # CI / 自动构建发布
 └── assets/                          # 截图
 ```

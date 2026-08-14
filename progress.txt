@@ -73,3 +73,7 @@
 [全部功能 story US-001~012 完成] 进入 US-013 文档/版本收口 + US-014 回归发版
 
 下一个迭代：US-013 冒烟扩充 + README + 版本号 bump 1.1.0
+
+[US-013] done — smoke 加 _verify_core_modules(聚合 snapshot/recommend/report/watch);README 加 v1.1.0 新功能段落+项目结构+用户JSON格式;_version.py 1.0.0→1.1.0;全部 6 模块测试+smoke 绿
+
+下一个迭代：US-014 全量回归 + 合并 main + tag v1.1.0 发版

@@ -185,7 +185,7 @@
       "title": "冒烟测试扩充 + README 更新 + 版本号 bump",
       "description": "把所有新核心模块测试纳入冒烟聚合调用；README 补 v1.1.0 新功能文档（快照对比/HTML/推荐/前台/守望/热键库扩展/续扫）；core/_version.py 1.0.0 → 1.1.0。",
       "priority": 13,
-      "passes": false,
+      "passes": true,
       "acceptanceCriteria": [
         "test_smoke_offscreen.py 末尾聚合调用各新模块测试，一次运行覆盖全链路",
         "README 新增 v1.1.0 功能特性段落 + 使用说明",

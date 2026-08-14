@@ -164,6 +164,41 @@ def _verify_watch_ui() -> None:
     print("[OK] 守望 UI: WatchDialog 构建(3 列时间线表,按钮初始禁用)")
 
 
+def _verify_core_modules() -> None:
+    """聚合验证新 core 模块的核心纯逻辑(snapshot/recommend/report/watch)。"""
+    from core import HotkeyCombo, HotkeyResult, HotkeyStatus  # noqa: E402
+    from core import recommend as _rec  # noqa: E402
+    from core import report as _rep  # noqa: E402
+    from core import snapshot as _snap  # noqa: E402
+    from core.watch import WatchState  # noqa: E402
+
+    # snapshot diff: free→occupied 计入 added
+    d = _snap.diff(
+        {"results": [{"modifiers": 2, "vk": 65, "status": "free"}]},
+        {"results": [{"modifiers": 2, "vk": 65, "status": "occupied"}]},
+    )
+    assert len(d["added"]) == 1, "snapshot diff 未识别新增占用"
+
+    # recommend: Ctrl+Alt+A 排在 Win+D 前
+    rs = [
+        HotkeyResult(HotkeyCombo(3, 0x41), HotkeyStatus.FREE),    # Ctrl+Alt+A
+        HotkeyResult(HotkeyCombo(8, 0x44), HotkeyStatus.SYSTEM),  # Win+D
+    ]
+    rec = _rec.recommend_free(rs, top_n=5)
+    assert rec and rec[0].name == "Ctrl+Alt+A", "recommend 排序异常"
+
+    # report: 渲染含 table
+    assert "<table" in _rep.render_html(rs), "report 未渲染表格"
+
+    # watch: free→occupied 识别为 1 次转变
+    ws = WatchState()
+    ws.record("free", [])
+    ws.record("occupied", ["X"])
+    assert len(ws.transitions) == 1, "watch 未识别转变"
+
+    print("[OK] core 聚合: snapshot diff / recommend / report / watch 全部正常")
+
+
 def main() -> int:
     # import 放进函数内:即使 import 阶段失败,外层 try 也能捕获并输出诊断
     from PySide6 import QtCore, QtWidgets  # noqa: E402
@@ -216,6 +251,7 @@ def main() -> int:
     _verify_snapshot_ui()
     _verify_recommend_ui()
     _verify_watch_ui()
+    _verify_core_modules()
 
     print("[OK] 冒烟测试全部通过")
     return 0
