@@ -7,8 +7,11 @@ from __future__ import annotations
 from PySide6 import QtCore, QtGui, QtWidgets
 
 from core import HotkeyResult, HotkeyStatus
+from core.ai_analyze import AiError, analyze_combo, load_ai_config
 from core.hotkeys import modifier_name, vk_name
+from core.suspect import rank_suspects
 
+from .ai_settings_dialog import AiSettingsDialog
 from .locate_dialog import LocateSourceDialog
 from .models import SCOPE_LABEL
 from .style import status_color
@@ -79,6 +82,10 @@ class DetailDialog(QtWidgets.QDialog):
             evl.addWidget(QtWidgets.QLabel(r.source or "—"))
         root.addWidget(ev_box)
 
+        # 嫌疑度排序(占用时:本地启发式,多候选 + 无证据时的兜底)
+        if r.status in (HotkeyStatus.OCCUPIED, HotkeyStatus.SYSTEM):
+            root.addWidget(self._build_suspect_box())
+
         # 建议
         advice = self._advice()
         if advice:
@@ -99,6 +106,14 @@ class DetailDialog(QtWidgets.QDialog):
             btn_locate.setToolTip("Windows 不告知占用者,用二分定位法逐个排查")
             btn_locate.clicked.connect(self._locate)
             btns.addWidget(btn_locate)
+            btn_ai = QtWidgets.QPushButton("🤖 AI 分析来源")
+            btn_ai.setObjectName("ai_analyze_btn")
+            btn_ai.setToolTip("把热键 + 嫌疑排序 + 进程列表发给自配的 LLM,给出嫌疑度排序与排查建议")
+            btn_ai.clicked.connect(self._ai_analyze)
+            btns.addWidget(btn_ai)
+            btn_ai_cfg = QtWidgets.QPushButton("⚙ AI 设置")
+            btn_ai_cfg.clicked.connect(self._ai_settings)
+            btns.addWidget(btn_ai_cfg)
         btns.addStretch(1)
         btn_copy = QtWidgets.QPushButton("📋 复制诊断信息")
         btn_copy.clicked.connect(self._copy)
@@ -108,6 +123,69 @@ class DetailDialog(QtWidgets.QDialog):
         btns.addWidget(btn_copy)
         btns.addWidget(btn_close)
         root.addLayout(btns)
+
+    # ------------------------------------------------------------------
+    def _build_suspect_box(self) -> QtWidgets.QGroupBox:
+        """嫌疑度排序区:本地启发式多候选打分(不依赖已知库精确命中)。"""
+        self._suspects = rank_suspects(self._result.combo)
+        box = QtWidgets.QGroupBox("嫌疑度排序(启发式推断)")
+        v = QtWidgets.QVBoxLayout(box)
+        v.setSpacing(4)
+        if not self._suspects:
+            v.addWidget(QtWidgets.QLabel("未发现正在运行的已知热键软件。可点「定位占用来源」二分排查,或用「AI 分析来源」。"))
+            return box
+        for s in self._suspects:
+            v.addWidget(self._check_row(
+                "△" if s.stars < 4 else "✓",
+                f"<b>{s.star_str}</b> {s.app} <span style='color:#888;font-size:11px'>({s.matched})</span>"
+                f"<br><span style='color:#6b7480;font-size:11px'>{' ; '.join(s.reasons)}</span>",
+            ))
+        return box
+
+    # ------------------------------------------------------------------
+    def _ai_settings(self) -> None:
+        AiSettingsDialog(self).exec()
+
+    def _ai_analyze(self) -> None:
+        """后台线程调用 LLM 分析,结果弹窗展示(不冻结 UI)。"""
+        if not load_ai_config().configured:
+            QtWidgets.QMessageBox.information(
+                self, "AI 分析",
+                "尚未配置 AI 模型。请先在「AI 设置」里填写 Base URL / API Key / 模型名。")
+            self._ai_settings()
+            if not load_ai_config().configured:
+                return
+        combo = self._result.combo
+        self._ai_btn_set_enabled(False)
+        self._ai_out = _AiWorker(combo)
+        self._ai_out.finished_ok.connect(self._ai_done)
+        self._ai_out.failed.connect(self._ai_fail)
+        self._ai_out.start()
+
+    def _ai_btn_set_enabled(self, enabled: bool) -> None:
+        btn = self.findChild(QtWidgets.QPushButton, "ai_analyze_btn")
+        if btn:
+            btn.setEnabled(enabled)
+            btn.setText("🤖 AI 分析来源" if enabled else "🤖 AI 分析中…")
+
+    def _ai_done(self, text: str) -> None:
+        self._ai_btn_set_enabled(True)
+        box = QtWidgets.QDialog(self)
+        box.setWindowTitle(f"AI 来源分析 · {self._result.name}")
+        box.setMinimumSize(520, 320)
+        lay = QtWidgets.QVBoxLayout(box)
+        view = QtWidgets.QTextEdit()
+        view.setReadOnly(True)
+        view.setMarkdown(text)
+        lay.addWidget(view)
+        btn_close = QtWidgets.QPushButton("关闭")
+        btn_close.clicked.connect(box.accept)
+        lay.addWidget(btn_close, alignment=QtCore.Qt.AlignRight)
+        box.exec()
+
+    def _ai_fail(self, msg: str) -> None:
+        self._ai_btn_set_enabled(True)
+        QtWidgets.QMessageBox.warning(self, "AI 分析失败", msg)
 
     # ------------------------------------------------------------------
     def _dim(self, text: str) -> QtWidgets.QLabel:
@@ -172,6 +250,28 @@ class DetailDialog(QtWidgets.QDialog):
             lines.append(f"来源: {r.source}")
         QtWidgets.QApplication.clipboard().setText("\n".join(lines))
         self.findChild(QtWidgets.QPushButton).setText("✓ 已复制")  # 简单反馈
+
+
+class _AiWorker(QtCore.QThread):
+    """后台调用 LLM,避免网络请求冻结 UI。"""
+
+    finished_ok = QtCore.Signal(str)
+    failed = QtCore.Signal(str)
+
+    def __init__(self, combo, parent: QtCore.QObject | None = None) -> None:
+        super().__init__(parent)
+        self._combo = combo
+
+    def run(self) -> None:  # pragma: no cover - 网络路径,单测走 mock
+        try:
+            text = analyze_combo(self._combo)
+        except AiError as e:
+            self.failed.emit(str(e))
+            return
+        except Exception as e:  # 线程里不吞未知异常
+            self.failed.emit(f"AI 调用异常:{e}")
+            return
+        self.finished_ok.emit(text)
 
 
 __all__ = ["DetailDialog"]

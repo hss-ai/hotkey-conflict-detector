@@ -71,6 +71,24 @@ def test_write_html_file() -> None:
     print("[OK] write_html 落盘成功,内容可读")
 
 
+def test_occupied_row_contains_suspects() -> None:
+    """无证据链的冲突行,来源列附嫌疑度排序(top3,小字)。"""
+    import core.report as rpt
+
+    orig = rpt.list_process_names
+    rpt.list_process_names = lambda: {"utools.exe", "explorer.exe"}
+    try:
+        results = [_mk(0xF, 0x20, HotkeyStatus.OCCUPIED,
+                       "无法注册(已被程序/系统/钩子占用)")]
+        h = render_html(results)
+    finally:
+        rpt.list_process_names = orig
+    assert "嫌疑:" in h
+    assert "uTools" in h and "★" in h
+    assert 'class="suspect"' in h
+    print("[OK] 冲突行附嫌疑度排序(uTools 命中)")
+
+
 def main() -> int:
     test_renders_key_tags()
     test_empty_results_no_crash()

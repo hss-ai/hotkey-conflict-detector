@@ -107,6 +107,35 @@ def test_snapshot_label() -> None:
     print(f"[OK] snapshot_label: {label}")
 
 
+def test_suspects_in_snapshot() -> None:
+    """冲突项(无证据链)序列化时附嫌疑度 top3;旧快照(无 suspects)可容错读回。"""
+    orig = snap.list_process_names
+    snap.list_process_names = lambda: {"utools.exe", "explorer.exe"}
+    try:
+        results = [
+            _mk(0xF, 0x20, HotkeyStatus.OCCUPIED, "无法注册(已被占用)"),
+            _mk(2, 0x42, HotkeyStatus.FREE),
+        ]
+        d = snap.to_dict(results)
+        e0 = d["results"][0]
+        assert "suspects" in e0, "冲突项应有嫌疑列表"
+        assert e0["suspects"][0]["app"] == "uTools"
+        assert 1 <= len(e0["suspects"]) <= 3
+        # free 项不附带
+        assert "suspects" not in d["results"][1]
+        # 读回:entries_from_dict 恢复 Suspect
+        entries = snap.entries_from_dict(d)
+        assert entries[0].suspects and entries[0].suspects[0].app == "uTools"
+        assert entries[0].suspects[0].stars >= 3
+        assert entries[1].suspects == []
+        # 旧版快照(无 suspects 字段)容错
+        legacy = {"results": [{"modifiers": 6, "vk": 0x41, "name": "x", "status": "occupied", "source": ""}]}
+        assert snap.entries_from_dict(legacy)[0].suspects == []
+        print(f"[OK] 快照含嫌疑列表:{[s['app'] for s in e0['suspects']]},旧快照容错")
+    finally:
+        snap.list_process_names = orig
+
+
 def main() -> int:
     test_to_dict_fields()
     test_save_load_roundtrip()

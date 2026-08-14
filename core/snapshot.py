@@ -12,17 +12,19 @@
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, field as dataclass_field
 from datetime import datetime
 from pathlib import Path
 from typing import Any
 
 from ._known_data import user_data_dir
 from ._version import __version__
+from .apps import list_process_names
 from .hotkeys import HotkeyCombo, format_combo
+from .suspect import deserialize_suspects, rank_suspects, serialize_suspects
 
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 # 视为"冲突"的状态值(占用 / 系统保留)——diff 据此判定新增/释放
 CONFLICT_STATUSES = {"occupied", "system"}
@@ -37,6 +39,7 @@ class SnapshotEntry:
     name: str
     status: str       # "free" / "occupied" / "system" / "error" / "skipped"
     source: str
+    suspects: list = dataclass_field(default_factory=list)  # list[Suspect](冲突项,嫌疑度 top3)
 
 
 def snapshots_dir() -> Path:
@@ -55,16 +58,25 @@ def to_dict(results: list[Any], meta: dict | None = None) -> dict:
     """
     stats: dict[str, int] = {}
     entries: list[dict] = []
+    running = None  # 惰性:首个冲突项才枚举一次进程
     for r in results:
         status = getattr(r.status, "value", str(r.status))
         stats[status] = stats.get(status, 0) + 1
-        entries.append({
+        entry = {
             "modifiers": r.modifiers,
             "vk": r.vk,
             "name": r.name,
             "status": status,
             "source": r.source or "",
-        })
+        }
+        if status in CONFLICT_STATUSES and not getattr(r, "evidence", None):
+            if running is None:
+                running = list_process_names()
+            suspects = rank_suspects(
+                HotkeyCombo(vk=r.vk, modifiers=r.modifiers), running)
+            if suspects:
+                entry["suspects"] = serialize_suspects(suspects)
+        entries.append(entry)
     return {
         "schema_version": SCHEMA_VERSION,
         "created_at": datetime.now().isoformat(timespec="seconds"),
@@ -117,6 +129,7 @@ def entries_from_dict(d: dict) -> list[SnapshotEntry]:
         out.append(SnapshotEntry(
             modifiers=mods, vk=vk, name=name,
             status=e.get("status", ""), source=e.get("source", ""),
+            suspects=deserialize_suspects(e.get("suspects")),
         ))
     return out
 

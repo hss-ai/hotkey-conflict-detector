@@ -29,6 +29,15 @@ from .detector import (
     quick_probe,
 )
 from . import apps
+from .suspect import Suspect, rank_suspects, format_suspects
+from .ai_analyze import (
+    AiConfig,
+    AiError,
+    load_ai_config,
+    save_ai_config,
+    analyze_combo,
+    test_config,
+)
 from .apps import (
     KNOWN_APPS,
     KNOWN_HOTKEYS,
@@ -66,6 +75,17 @@ __all__ = [
     "quick_probe",
     # apps
     "apps",
+    # suspect
+    "Suspect",
+    "rank_suspects",
+    "format_suspects",
+    # ai_analyze
+    "AiConfig",
+    "AiError",
+    "load_ai_config",
+    "save_ai_config",
+    "analyze_combo",
+    "test_config",
     "KNOWN_APPS",
     "KNOWN_HOTKEYS",
     "KnownApp",

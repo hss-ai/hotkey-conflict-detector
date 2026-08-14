@@ -14,6 +14,9 @@ from pathlib import Path
 from typing import Any
 
 from ._version import __version__
+from .apps import list_process_names
+from .hotkeys import HotkeyCombo
+from .suspect import rank_suspects
 
 # HTML 配色(与 ui/style.py 协调:绿=空闲 / 红=占用冲突 / 灰=系统 / 橙=异常)
 _C_FREE = "#16a34a"
@@ -98,7 +101,17 @@ def render_html(results: list[Any], meta: dict | None = None) -> str:
     conflict_rows.sort(key=lambda r: (0 if _status_value(r) == "occupied" else 1, r.name))
 
     if conflict_rows:
-        body = "\n".join(_row_html(r) for r in conflict_rows)
+        running = None  # 惰性:首个无证据的冲突项才枚举一次进程
+        body_parts = []
+        for r in conflict_rows:
+            suspects = None
+            if not getattr(r, "evidence", None):
+                if running is None:
+                    running = list_process_names()
+                suspects = rank_suspects(
+                    HotkeyCombo(vk=r.vk, modifiers=r.modifiers), running)
+            body_parts.append(_row_html(r, suspects))
+        body = "\n".join(body_parts)
         table_html = (
             '<table class="grid"><thead><tr>'
             '<th>组合</th><th>状态</th><th>作用域</th><th>可能来源</th>'
@@ -144,17 +157,31 @@ def render_html(results: list[Any], meta: dict | None = None) -> str:
     )
 
 
-def _row_html(r: Any) -> str:
+def _row_html(r: Any, suspects: list | None = None) -> str:
     s = _status_value(r)
     label, color = _STATUS_META.get(s, (s, _C_MUTED))
     scope = "系统级" if s == "system" else "全局占用" if s == "occupied" else "—"
     source = getattr(r, "source", "") or "—"
+    # 无证据链时附嫌疑度排序(启发式,top3,小字)
+    if suspects:
+        items = " · ".join(
+            f'{_esc(x.app)} <span class="stars">{x.star_str}</span>'
+            f'<span class="muted">({_esc(x.matched)})</span>'
+            for x in suspects[:3]
+        )
+        source = (
+            f'{_esc(source)}<br><span class="suspect">嫌疑:{items}</span>'
+            if source and source != "—" else
+            f'<span class="suspect">嫌疑:{items}</span>'
+        )
+    else:
+        source = _esc(source)
     return (
         f'<tr>'
         f'<td class="combo">{_esc(r.name)}</td>'
         f'<td><span class="badge" style="background:{color}1a;color:{color}">{_esc(label)}</span></td>'
         f'<td>{_esc(scope)}</td>'
-        f'<td class="src">{_esc(source)}</td>'
+        f'<td class="src">{source}</td>'
         f'</tr>'
     )
 
@@ -197,6 +224,9 @@ _TEMPLATE = """<!DOCTYPE html>
   table.grid tr:last-child td {{ border-bottom:none; }}
   td.combo {{ font-weight:600; font-family:Consolas,monospace; }}
   td.src {{ color:{muted}; font-size:12px; }}
+  .suspect {{ font-size:11px; color:{text}; }}
+  .suspect .stars {{ color:#d97706; letter-spacing:1px; }}
+  .suspect .muted {{ color:{muted}; }}
   .badge {{ padding:3px 10px; border-radius:5px; font-size:12px; font-weight:600; }}
   .top {{ list-style:none; padding:0; margin:0; }}
   .top li {{ background:{panel}; border:1px solid {border}; border-radius:8px;

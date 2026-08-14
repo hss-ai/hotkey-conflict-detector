@@ -8,4 +8,4 @@
     3. 打对应 tag(如 ``git tag v1.1.0``)
     4. 推送 tag —— CI 自动构建 exe 并发布 GitHub Release
 """
-__version__ = "1.1.0"
+__version__ = "1.2.0"
