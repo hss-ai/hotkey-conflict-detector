@@ -35,15 +35,14 @@ jobs:
         id: version
         shell: python
         run: |
-          import re
-          tag = "${{ github.ref_name }}"   # 形如 v1.0.0;手动触发时为空
+          import os, re
           src = open("core/_version.py", encoding="utf-8").read()
           ver = re.search(r'__version__\s*=\s*["\']([^"\']+)["\']', src).group(1)
-          print(f"value={ver}")
-          print(f"name=HotkeyConflictDetector-{ver}-windows-x64.exe")
-          with open("$GITHUB_OUTPUT", "a", encoding="utf-8") as f:
+          # 注意:shell:python 下 $GITHUB_OUTPUT 不会展开,必须用环境变量
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as f:
               f.write(f"value={ver}\n")
               f.write(f"name=HotkeyConflictDetector-{ver}-windows-x64.exe\n")
+          print(f"version={ver}, file=HotkeyConflictDetector-{ver}-windows-x64.exe")
 
       - name: 构建 exe
         run: >
