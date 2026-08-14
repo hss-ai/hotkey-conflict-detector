@@ -2,8 +2,11 @@
 
 原理:Windows 没有提供"枚举所有已注册全局热键"的官方 API,
 但 `RegisterHotKey` 是全局唯一的——若某组合已被占用,再次注册会失败并返回
-`ERROR_HOTKEY_ALREADY_REGISTERED (1419)`。本模块据此逐个组合试探,
+`ERROR_HOTKEY_ALREADY_REGISTERED (1409)`。本模块据此逐个组合试探,
 立即注销探测用的注册项,从而判断每个组合当前是否被占用。
+
+注意错误码区分:RegisterHotKey 失败返回 1409(已被占用);
+1419 是 UnregisterHotKey 注销不存在项时的错误码,RegisterHotKey 不会产生。
 
 注意:
 - 探测会"短暂占用"目标组合(注册→注销之间,通常在毫秒级),期间若用户正好按下
