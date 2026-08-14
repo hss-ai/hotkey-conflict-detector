@@ -138,4 +138,15 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    try:
+        raise SystemExit(main())
+    except SystemExit:
+        raise
+    except BaseException:
+        import traceback
+        tb = traceback.format_exc()
+        # GitHub Actions 工作流命令:::error:: 会创建公开可见的 annotation,便于无 token 诊断
+        last = tb.strip().splitlines()[-1] if tb.strip() else "(无 traceback)"
+        print(f"::error::冒烟测试失败:{last}")
+        print(tb)
+        raise SystemExit(1)
