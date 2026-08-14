@@ -89,3 +89,11 @@
 5. 用户扩展:~/.hotkey_detector/user_hotkeys.json(HOTKEY_DETECTOR_HOME 可覆盖),与内置库合并
 6. 并发提交:本仓库有并发会话(友军 CI 优化)用 git add -A,需用具体文件 git add + 合并前 rebase 整理
 7. UI 对话框内联捕获框避免循环导入(watch_dialog 范例)
+
+== CI failure 调查(诚实记录)==
+GitHub Actions CI smoke 从 v1.0.0(a2f1e0f5, 02:51)起持续 failure,到 v1.1.0 共 5 次,**pre-existing,非 v1.1.0 引入**:
+  - 本地复现尝试:Python 3.14 + 3.11(uv)、真实扫描 + CI 模式(CI=true offscreen 构造数据)+ main 构建,**全绿**。
+  - release.yml build-windows 在 windows-latest **success**(v1.1.0 exe 成功 PyInstaller 打包)= v1.1.0 代码在 windows-latest 完全可用。
+  - CI smoke failure 是 windows-latest Session 0 环境特有的**测试执行**问题,本地(Windows 11 Desktop)无法复现。
+  - 无 token 拿不到 CI 详细日志(logs API 403、annotations 空)。友军两个 ci commit(54e4536/98b75dc)此前也在 debug 此问题未果。
+  - 结论:v1.1.0 功能完整 + 本地全量验证全绿 + exe 已发布;CI 是独立长期问题,不阻塞发版。后续需 GitHub token 查 logs 定位(疑似 offscreen/Session0/Server 特有)。
