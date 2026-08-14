@@ -103,6 +103,8 @@ class MainWindow(QtWidgets.QMainWindow):
         self._thread: Optional[ScanThread] = None
         self._pending: list[HotkeyResult] = []
         self._running_apps: list = []
+        self._scanned_keys: set[tuple[int, int]] = set()  # 已扫过的 combo(续扫用)
+        self._has_partial: bool = False                    # 上次扫描是否未完成
 
         # 刷新节流定时器
         self._flush_timer = QtCore.QTimer(self)
@@ -404,10 +406,35 @@ class MainWindow(QtWidgets.QMainWindow):
             QtWidgets.QMessageBox.information(self, "提示", "请至少选择一类按键。")
             return
 
-        self.clear_results(silent=True)
+        exclude: set[tuple[int, int]] = set()
+        # 续扫:上次未扫完且有部分结果 → 询问继续扫描剩余 / 重新开始
+        if self._has_partial and self._model.rowCount() > 0 and self._scanned_keys:
+            remaining = sum(1 for c in combos if (c.modifiers, c.vk) not in self._scanned_keys)
+            if remaining > 0:
+                choice = QtWidgets.QMessageBox.question(
+                    self, "继续扫描?",
+                    f"上次扫描未完成(已扫 {len(self._scanned_keys)} 个,剩余约 {remaining} 个)。\n"
+                    "「Yes」继续扫描剩余 ·「No」重新开始 ·「Cancel」取消。",
+                    QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No | QtWidgets.QMessageBox.Cancel,
+                )
+                if choice == QtWidgets.QMessageBox.Cancel:
+                    return
+                if choice == QtWidgets.QMessageBox.Yes:
+                    exclude = set(self._scanned_keys)  # 续扫:跳过已扫,不清空已有结果
+                else:  # No: 重新开始
+                    self._scanned_keys.clear()
+                    self.clear_results(silent=True)
+            else:
+                self._scanned_keys.clear()
+                self.clear_results(silent=True)
+        else:
+            self._scanned_keys.clear()
+            self.clear_results(silent=True)
+
+        self._has_partial = False
         self._refresh_running_apps()
 
-        self._thread = ScanThread(combos, self)
+        self._thread = ScanThread(combos, exclude=exclude, parent=self)
         self._thread.result_ready.connect(self._on_result)
         self._thread.progress.connect(self._on_progress)
         self._thread.finished_scan.connect(self._on_finished)
@@ -417,7 +444,8 @@ class MainWindow(QtWidgets.QMainWindow):
         self._flush_timer.start()
         self._thread.start()
 
-        self._sb_status.setText("扫描中…(探测期间会短暂占用目标组合,请勿同时按下热键)")
+        hint = "(续扫剩余)" if exclude else ""
+        self._sb_status.setText(f"扫描中{hint}…(探测期间会短暂占用目标组合,请勿同时按下热键)")
 
     def stop_scan(self) -> None:
         if self._thread is not None:
@@ -426,6 +454,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def _on_result(self, result: HotkeyResult) -> None:
         self._pending.append(result)
+        self._scanned_keys.add((result.modifiers, result.vk))
 
     def _flush_results(self) -> None:
         if not self._pending:
@@ -451,6 +480,8 @@ class MainWindow(QtWidgets.QMainWindow):
         self._progress.setFormat(f"完成 · 已扫描 {scanned}/{total}")
         self._update_stats()
         self._set_scanning(False)
+        # 标记是否未完整扫完(中途停止),供下次 start_scan 判断是否提示续扫
+        self._has_partial = not stats.get("completed", True)
         msg = f"扫描完成:{scanned}/{total} 个组合。"
         if conflict:
             msg += f"\n发现 {conflict} 个冲突(占用 {occupied} + 系统 {system})。"
@@ -476,6 +507,8 @@ class MainWindow(QtWidgets.QMainWindow):
     # ------------------------------------------------------------------
     def clear_results(self, silent: bool = False) -> None:
         self._pending.clear()
+        self._scanned_keys.clear()
+        self._has_partial = False
         self._model.clear()
         self._progress.setValue(0)
         self._progress.setFormat("就绪")

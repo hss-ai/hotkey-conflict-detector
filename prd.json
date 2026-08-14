@@ -116,7 +116,7 @@
       "title": "扫描续扫：ScanThread 支持排除已扫集合 + 主窗口续扫",
       "description": "ScanThread 增加 exclude 集合参数（已扫过的 combo 跳过）；主窗口停止后保留结果，再次点扫描时若存在部分结果则提示「继续扫描剩余 / 重新开始」。",
       "priority": 8,
-      "passes": false,
+      "passes": true,
       "acceptanceCriteria": [
         "ScanThread.__init__ 接受可选 exclude: set[(modifiers,vk)]，run 中跳过这些 combo",
         "MainWindow 停止扫描后 _partial_results 记录已扫集合；再次 start_scan 时若有部分结果弹选择框",

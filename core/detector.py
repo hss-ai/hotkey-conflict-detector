@@ -177,6 +177,14 @@ def _resolve_source(status: HotkeyStatus, err: int, combo: HotkeyCombo) -> tuple
 # ---------------------------------------------------------------------------
 # 后台扫描线程(QThread)
 # ---------------------------------------------------------------------------
+def filter_combos(
+    combos: list[HotkeyCombo], exclude: set[tuple[int, int]] | None
+) -> list[HotkeyCombo]:
+    """续扫过滤:剔除已扫过的 (modifiers,vk) 组合,返回待扫列表。纯逻辑,可单测。"""
+    excl = set(exclude) if exclude else set()
+    return [c for c in combos if (c.modifiers, c.vk) not in excl]
+
+
 class ScanThread(QtCore.QThread):
     """在后台逐个探测组合,通过信号实时回报进度与结果。"""
 
@@ -187,9 +195,16 @@ class ScanThread(QtCore.QThread):
     # 全部结束:(统计字典)
     finished_scan = QtCore.Signal(dict)
 
-    def __init__(self, combos: list[HotkeyCombo], parent: Optional[QtCore.QObject] = None) -> None:
+    def __init__(
+        self,
+        combos: list[HotkeyCombo],
+        exclude: set[tuple[int, int]] | None = None,
+        parent: Optional[QtCore.QObject] = None,
+    ) -> None:
         super().__init__(parent)
         self._combos = list(combos)
+        # 续扫:已扫过的 (modifiers,vk) 集合,run 时跳过
+        self._exclude: set[tuple[int, int]] = set(exclude) if exclude else set()
         self._stop_flag = False
 
     def request_stop(self) -> None:
@@ -197,11 +212,13 @@ class ScanThread(QtCore.QThread):
         self._stop_flag = True
 
     def run(self) -> None:  # noqa: D401 - QThread 入口
-        total = len(self._combos)
+        # 续扫:剔除已扫过的 combo,只扫剩余
+        to_scan = filter_combos(self._combos, self._exclude)
+        total = len(to_scan)
         stats = {"free": 0, "occupied": 0, "system": 0, "error": 0, "skipped": 0}
         refresh_running_processes()  # 刷新进程缓存,供证据链判断"app 是否运行"
 
-        for i, combo in enumerate(self._combos):
+        for i, combo in enumerate(to_scan):
             if self._stop_flag:
                 break  # 用户已请求停止,剩余项不再探测
 
@@ -215,10 +232,10 @@ class ScanThread(QtCore.QThread):
             stats[key] = stats.get(key, 0) + 1
             self.progress.emit(i + 1, total)
 
-        stats["scanned"] = sum(
-            v for k, v in stats.items() if k != "skipped"
-        )
+        scanned = sum(v for k, v in stats.items() if k != "skipped")
+        stats["scanned"] = scanned
         stats["total"] = total
+        stats["completed"] = scanned == total  # 是否完整扫完(未中途停止)
         self.finished_scan.emit(stats)
 
 
@@ -227,6 +244,7 @@ __all__ = [
     "HotkeyResult",
     "HotkeyDetector",
     "ScanThread",
+    "filter_combos",
     "probe",
     "is_hotkey_occupied",
     "quick_probe",

@@ -103,6 +103,22 @@ def _verify_error_codes() -> None:
     print("[OK] 错误码一致: RegisterHotKey 占用=1409, UnregisterHotKey 注销=1419")
 
 
+def _verify_resume() -> None:
+    """续扫逻辑:filter_combos 剔除已扫 + ScanThread 接受 exclude(构造数据)。"""
+    from core import HotkeyCombo, ScanThread  # noqa: E402
+    from core.detector import filter_combos  # noqa: E402
+
+    combos = [HotkeyCombo(m, v) for m in (1, 2, 3) for v in (0x41, 0x42)]  # 6 个
+    scanned = {(1, 0x41), (2, 0x42)}  # 假设已扫 2 个
+    pending = filter_combos(combos, scanned)
+    assert len(pending) == 4, f"续扫应剩 4 个,实际 {len(pending)}"
+    assert all((c.modifiers, c.vk) not in scanned for c in pending)
+    th = ScanThread(combos, exclude=scanned)
+    assert th._exclude == scanned, "ScanThread._exclude 未正确接收"
+    assert len(th._combos) == 6, "原始 combos 不应被修改"
+    print("[OK] 续扫: filter_combos 剔除已扫 + ScanThread exclude 生效")
+
+
 def main() -> int:
     # import 放进函数内:即使 import 阶段失败,外层 try 也能捕获并输出诊断
     from PySide6 import QtCore, QtWidgets  # noqa: E402
@@ -151,6 +167,7 @@ def main() -> int:
     _verify_scope_mapping()
     _verify_vk_regression()
     _verify_error_codes()
+    _verify_resume()
 
     print("[OK] 冒烟测试全部通过")
     return 0
