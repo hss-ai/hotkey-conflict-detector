@@ -40,3 +40,8 @@
 [US-005] done — core/recommend.py(recommend_free 友好度排序)+ tests/test_recommend.py 4 例
 
 下一个迭代：US-006 前台窗口探测 core/foreground.py
+
+[US-006] done — core/foreground.py(GetForegroundWindow+GetWindowThreadProcessId+process_name_by_pid+hint)+ tests/test_foreground.py 4 例(含真实自身PID查询)
+  教训:mock get_foreground_process 时要返回小写名(真实函数已小写化),否则 hint 匹配失败;改为测 process_name_by_pid(os.getpid()) 验证真实小写化更靠谱。
+
+下一个迭代：US-007 守望核心逻辑 core/watch.py

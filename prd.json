@@ -89,7 +89,7 @@
       "title": "前台窗口进程探测 core/foreground.py + 单测",
       "description": "新增 core/foreground.py：用 ctypes GetForegroundWindow + GetWindowThreadProcessId + 查 PID 进程名，返回当前前台应用进程名。对比 KNOWN_APPS 给出是否为热键软件。",
       "priority": 6,
-      "passes": false,
+      "passes": true,
       "acceptanceCriteria": [
         "foreground.py 提供 get_foreground_process() -> (pid, exe_name_lower) 和 get_foreground_hotkey_hint() -> str",
         "失败（无前台窗口等）返回 ('', '') / 空串不崩溃",
