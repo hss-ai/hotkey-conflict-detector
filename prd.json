@@ -171,7 +171,7 @@
       "title": "守望模式 UI：ui/watch_dialog.py + 工具栏入口",
       "description": "工具栏新增「⏱ 守望模式」按钮，打开对话框：选/捕获一个组合→开始/停止守望→用 QTimer 轮询 core.watch.WatchState，实时展示时间线表格（时刻/状态/运行软件），状态转变时高亮+提示音。",
       "priority": 12,
-      "passes": false,
+      "passes": true,
       "acceptanceCriteria": [
         "ui/watch_dialog.py 含组合捕获、开始/停止、时间线 QTableWidget、状态转变高亮",
         "守望用 QTimer 轮询 quick_probe + core.watch.WatchState.record，最小间隔可配（默认 2s）",

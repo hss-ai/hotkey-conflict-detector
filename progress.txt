@@ -67,3 +67,9 @@
 [US-011] done — main_window: _fg_timer(3s 轮询)+ _sb_fg 状态栏标签 + _update_foreground(已知热键软件高亮)+ closeEvent 停止;offscreen 下优雅置空
 
 下一个迭代：US-012 守望模式 UI(watch_dialog + 工具栏入口)
+
+[US-012] done — ui/watch_dialog.py(_ComboCapture 内联捕获框+WatchDialog:QTimer轮询+时间线表+转变提示音)+ main_window 加守望按钮;smoke 加 _verify_watch_ui
+  设计决策:组合捕获框内联于 watch_dialog(不 import main_window),避免循环导入。
+[全部功能 story US-001~012 完成] 进入 US-013 文档/版本收口 + US-014 回归发版
+
+下一个迭代：US-013 冒烟扩充 + README + 版本号 bump 1.1.0

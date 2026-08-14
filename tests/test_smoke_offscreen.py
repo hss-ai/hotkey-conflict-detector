@@ -154,6 +154,16 @@ def _verify_recommend_ui() -> None:
     print(f"[OK] 推荐 UI: RecommendDialog 构建,首推 {dlg._rec[0].name}")
 
 
+def _verify_watch_ui() -> None:
+    """守望 UI:WatchDialog 构建(时间线表 + 开始按钮初始禁用)。"""
+    from ui.watch_dialog import WatchDialog  # noqa: E402
+
+    dlg = WatchDialog()
+    assert dlg._table.columnCount() == 3, "时间线表应有 3 列"
+    assert dlg._btn_toggle.isEnabled() is False, "未捕获组合前开始按钮应禁用"
+    print("[OK] 守望 UI: WatchDialog 构建(3 列时间线表,按钮初始禁用)")
+
+
 def main() -> int:
     # import 放进函数内:即使 import 阶段失败,外层 try 也能捕获并输出诊断
     from PySide6 import QtCore, QtWidgets  # noqa: E402
@@ -205,6 +215,7 @@ def main() -> int:
     _verify_resume()
     _verify_snapshot_ui()
     _verify_recommend_ui()
+    _verify_watch_ui()
 
     print("[OK] 冒烟测试全部通过")
     return 0

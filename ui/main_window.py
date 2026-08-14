@@ -34,6 +34,7 @@ from core.report import write_html
 from .detail_dialog import DetailDialog
 from .recommend_dialog import RecommendDialog
 from .snapshot_dialog import SnapshotCompareDialog
+from .watch_dialog import WatchDialog
 from .models import COL_STATUS, SCOPE_LABEL, HotkeyFilterProxy, HotkeyTableModel
 from .style import QSS, STATUS_COLORS, status_color
 
@@ -173,6 +174,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self._btn_snapshot_diff = self._mkbtn("📊 对比快照")
         self._btn_export_html = self._mkbtn("📄 导出 HTML")
         self._btn_recommend = self._mkbtn("💡 推荐可用")
+        self._btn_watch = self._mkbtn("⏱ 守望模式")
         self._btn_about = self._mkbtn("关于")
 
         for b in (
@@ -180,6 +182,7 @@ class MainWindow(QtWidgets.QMainWindow):
             self._btn_export, self._btn_copy,
             self._btn_snapshot_save, self._btn_snapshot_diff,
             self._btn_export_html, self._btn_recommend,
+            self._btn_watch,
             self._btn_about,
         ):
             bar.addWidget(b)
@@ -382,6 +385,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self._btn_snapshot_diff.clicked.connect(self.show_snapshot_compare)
         self._btn_export_html.clicked.connect(self.export_html)
         self._btn_recommend.clicked.connect(self.show_recommend)
+        self._btn_watch.clicked.connect(self.show_watch)
         self._btn_about.clicked.connect(self.about)
         self._table.doubleClicked.connect(self._show_detail)
 
@@ -736,6 +740,10 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def show_recommend(self) -> None:
         RecommendDialog(self._model.all_results(), self).exec()
+
+    def show_watch(self) -> None:
+        """打开守望模式对话框(对一个热键持续探测,记录状态时间线)。"""
+        WatchDialog(self).exec()
 
     # ------------------------------------------------------------------
     # 其他
