@@ -45,3 +45,8 @@
   教训:mock get_foreground_process 时要返回小写名(真实函数已小写化),否则 hint 匹配失败;改为测 process_name_by_pid(os.getpid()) 验证真实小写化更靠谱。
 
 下一个迭代：US-007 守望核心逻辑 core/watch.py
+
+[US-007] done — core/watch.py(WatchState 状态机+transitions+conflict_transitions+summary)+ tests/test_watch.py 5 例
+[全部 core 数据层 US-002~007 回归] 6 个模块测试 + smoke 全绿
+
+下一个迭代：US-008 扫描续扫(ScanThread exclude + 主窗口续扫/重开)

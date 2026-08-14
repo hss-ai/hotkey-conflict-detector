@@ -102,7 +102,7 @@
       "title": "实时守望核心逻辑 core/watch.py（状态机 + 时间线）",
       "description": "新增 core/watch.py：对一个组合轮询探测，维护 WatchEvent 时间线（timestamp, status, running_apps 快照），检测 FREE→OCCUPIED 等状态转变并记录。纯逻辑：WatchState 类 + record_event + transitions 属性，不含 Qt 定时器。",
       "priority": 7,
-      "passes": false,
+      "passes": true,
       "acceptanceCriteria": [
         "watch.py 提供 WatchState 类（events 列表、record(status, running_apps)、transitions 返回状态转变点、summary 文本）",
         "transitions 正确识别 FREE→OCCUPIED 与反向，记录转变时刻 + 当时运行进程",
