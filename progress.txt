@@ -54,3 +54,8 @@
 [US-008] done — detector.py: ScanThread 加 exclude 参数 + filter_combos 纯函数 + stats.completed;main_window: _scanned_keys/_has_partial + start_scan 续扫询问 + _on_result 记录已扫;smoke 加 _verify_resume
 
 下一个迭代：US-009 快照 UI(存/对比按钮 + 对比对话框)
+
+[US-009] done — ui/snapshot_dialog.py(对比对话框:选两份快照 diff 三类着色)+ main_window 加存/对比按钮;smoke 加 _verify_snapshot_ui
+  bug 修复:snapshot.save 同秒覆盖(时间戳精度到秒,快速连点会覆盖)→ 同名追加序号 _2/_3
+
+下一个迭代：US-010 HTML 导出 + 空闲推荐 UI

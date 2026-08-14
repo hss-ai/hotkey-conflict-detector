@@ -83,6 +83,11 @@ def save(results: list[Any], meta: dict | None = None, path: str | Path | None =
         directory.mkdir(parents=True, exist_ok=True)
         ts = datetime.now().strftime("%Y%m%d_%H%M%S")
         path = directory / f"snapshot_{ts}.json"
+        # 同秒内多次保存:追加序号避免覆盖
+        n = 2
+        while path.exists():
+            path = directory / f"snapshot_{ts}_{n}.json"
+            n += 1
     target = Path(path)
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")

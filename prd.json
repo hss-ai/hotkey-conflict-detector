@@ -130,7 +130,7 @@
       "title": "快照 UI：保存/对比按钮 + 对比对话框 ui/snapshot_dialog.py",
       "description": "工具栏新增「💾 存快照」「📊 对比快照」按钮。存快照调 core.snapshot.save；对比快照打开对话框，选两份历史快照做 diff，展示新增占用/已释放/状态变化三类列表。",
       "priority": 9,
-      "passes": false,
+      "passes": true,
       "acceptanceCriteria": [
         "工具栏有存快照、对比快照两个按钮，存快照在没有结果时提示先扫描",
         "ui/snapshot_dialog.py 对比对话框列出 snapshots/ 目录下历史快照供选择，diff 结果分三类着色展示",

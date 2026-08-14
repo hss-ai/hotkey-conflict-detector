@@ -119,6 +119,26 @@ def _verify_resume() -> None:
     print("[OK] 续扫: filter_combos 剔除已扫 + ScanThread exclude 生效")
 
 
+def _verify_snapshot_ui() -> None:
+    """快照 UI 链路:存两份快照 → 对比对话框构建 + diff 填充(构造数据)。"""
+    import tempfile  # noqa: E402
+    from core import snapshot as _snap  # noqa: E402
+    from ui.snapshot_dialog import SnapshotCompareDialog  # noqa: E402
+    from core import HotkeyCombo, HotkeyResult, HotkeyStatus  # noqa: E402
+
+    with tempfile.TemporaryDirectory() as tmp:
+        os.environ["HOTKEY_DETECTOR_HOME"] = tmp
+        old = [HotkeyResult(HotkeyCombo(2, 0x41), HotkeyStatus.FREE)]
+        new = [HotkeyResult(HotkeyCombo(2, 0x41), HotkeyStatus.OCCUPIED, "X")]
+        _snap.save(old, meta={"label": "旧"})
+        _snap.save(new, meta={"label": "新"})
+        dlg = SnapshotCompareDialog()
+        assert dlg._cb_old.count() == 2, "应列出 2 份快照"
+        assert dlg._result_layout.count() >= 3, "应填 3 个分类区"
+        print("[OK] 快照 UI: 两份快照 → 对比对话框构建 + diff 填充正常")
+    os.environ.pop("HOTKEY_DETECTOR_HOME", None)
+
+
 def main() -> int:
     # import 放进函数内:即使 import 阶段失败,外层 try 也能捕获并输出诊断
     from PySide6 import QtCore, QtWidgets  # noqa: E402
@@ -168,6 +188,7 @@ def main() -> int:
     _verify_vk_regression()
     _verify_error_codes()
     _verify_resume()
+    _verify_snapshot_ui()
 
     print("[OK] 冒烟测试全部通过")
     return 0

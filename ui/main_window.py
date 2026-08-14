@@ -27,8 +27,10 @@ from core.hotkeys import (
     modifier_name,
     vk_name,
 )
+from core import snapshot as snap
 
 from .detail_dialog import DetailDialog
+from .snapshot_dialog import SnapshotCompareDialog
 from .models import COL_STATUS, SCOPE_LABEL, HotkeyFilterProxy, HotkeyTableModel
 from .style import QSS, STATUS_COLORS, status_color
 
@@ -157,11 +159,15 @@ class MainWindow(QtWidgets.QMainWindow):
         self._btn_clear = self._mkbtn("清空")
         self._btn_export = self._mkbtn("💾 导出 CSV")
         self._btn_copy = self._mkbtn("📋 复制冲突")
+        self._btn_snapshot_save = self._mkbtn("📁 存快照")
+        self._btn_snapshot_diff = self._mkbtn("📊 对比快照")
         self._btn_about = self._mkbtn("关于")
 
         for b in (
             self._btn_scan, self._btn_stop, self._btn_clear,
-            self._btn_export, self._btn_copy, self._btn_about,
+            self._btn_export, self._btn_copy,
+            self._btn_snapshot_save, self._btn_snapshot_diff,
+            self._btn_about,
         ):
             bar.addWidget(b)
         return bar
@@ -357,6 +363,8 @@ class MainWindow(QtWidgets.QMainWindow):
         self._btn_clear.clicked.connect(self.clear_results)
         self._btn_export.clicked.connect(self.export_csv)
         self._btn_copy.clicked.connect(self.copy_conflicts)
+        self._btn_snapshot_save.clicked.connect(self.save_snapshot)
+        self._btn_snapshot_diff.clicked.connect(self.show_snapshot_compare)
         self._btn_about.clicked.connect(self.about)
         self._table.doubleClicked.connect(self._show_detail)
 
@@ -639,6 +647,35 @@ class MainWindow(QtWidgets.QMainWindow):
         text = "\n".join(lines)
         QtWidgets.QApplication.clipboard().setText(text)
         self._sb_status.setText(f"已复制 {len(conflicts)} 个冲突组合到剪贴板。")
+
+    # ------------------------------------------------------------------
+    # 快照(基线对比)
+    # ------------------------------------------------------------------
+    def save_snapshot(self) -> None:
+        results = self._model.all_results()
+        if not results:
+            QtWidgets.QMessageBox.information(self, "存快照", "当前没有扫描结果,请先扫描。")
+            return
+        label, ok = QtWidgets.QInputDialog.getText(
+            self, "存快照", "为这份快照加个备注(可选,如「装软件前」):"
+        )
+        if not ok:
+            return
+        try:
+            path = snap.save(results, meta={"label": label.strip()})
+        except OSError as e:  # noqa: BLE001
+            QtWidgets.QMessageBox.warning(self, "存快照失败", str(e))
+            return
+        conflict = sum(1 for r in results if r.status.is_conflict)
+        QtWidgets.QMessageBox.information(
+            self, "已保存快照",
+            f"快照已保存:\n{path}\n\n共 {len(results)} 个组合,{conflict} 个冲突。\n"
+            "之后可用「📊 对比快照」与历史快照对比。",
+        )
+        self._sb_status.setText(f"快照已保存:{path.name}")
+
+    def show_snapshot_compare(self) -> None:
+        SnapshotCompareDialog(self).exec()
 
     # ------------------------------------------------------------------
     # 其他
