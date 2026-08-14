@@ -157,7 +157,7 @@
       "title": "前台应用上下文 UI（状态栏定时刷新）",
       "description": "MainWindow 用 QTimer（~3s）轮询 core.foreground.get_foreground_hotkey_hint，在状态栏显示「当前焦点：X（已知热键软件）」或普通焦点。扫描中可暂停。",
       "priority": 11,
-      "passes": false,
+      "passes": true,
       "acceptanceCriteria": [
         "状态栏新增前台焦点标签，定时刷新且不阻塞 UI",
         "前台是已知热键软件时标签着色/加图标提示",

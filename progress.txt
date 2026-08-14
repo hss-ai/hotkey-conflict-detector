@@ -63,3 +63,7 @@
 [US-010] done — ui/recommend_dialog.py(推荐对话框+复制)+ main_window 加 HTML导出/推荐按钮;smoke 加 _verify_recommend_ui
 
 下一个迭代：US-011 前台应用上下文 UI(状态栏定时刷新)
+
+[US-011] done — main_window: _fg_timer(3s 轮询)+ _sb_fg 状态栏标签 + _update_foreground(已知热键软件高亮)+ closeEvent 停止;offscreen 下优雅置空
+
+下一个迭代：US-012 守望模式 UI(watch_dialog + 工具栏入口)

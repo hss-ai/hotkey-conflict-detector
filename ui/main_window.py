@@ -28,6 +28,7 @@ from core.hotkeys import (
     vk_name,
 )
 from core import snapshot as snap
+from core.foreground import get_foreground_hotkey_hint
 from core.report import write_html
 
 from .detail_dialog import DetailDialog
@@ -115,6 +116,12 @@ class MainWindow(QtWidgets.QMainWindow):
         self._flush_timer.setInterval(50)
         self._flush_timer.timeout.connect(self._flush_results)
 
+        # 前台窗口轮询定时器(状态栏显示当前焦点应用是否为热键软件)
+        self._fg_timer = QtCore.QTimer(self)
+        self._fg_timer.setInterval(3000)
+        self._fg_timer.timeout.connect(self._update_foreground)
+        self._fg_timer.start()
+
         self._model = HotkeyTableModel(self)
         self._proxy = HotkeyFilterProxy(self)
         self._proxy.setSourceModel(self._model)
@@ -123,6 +130,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self._connect_signals()
         self._update_stats()
         self._refresh_running_apps()
+        self._update_foreground()
 
     # ------------------------------------------------------------------
     # UI 构建
@@ -355,8 +363,10 @@ class MainWindow(QtWidgets.QMainWindow):
         sb = QtWidgets.QStatusBar()
         self.setStatusBar(sb)
         self._sb_status = QtWidgets.QLabel("就绪")
+        self._sb_fg = QtWidgets.QLabel()
         self._sb_apps = QtWidgets.QLabel()
         sb.addWidget(self._sb_status, 2)
+        sb.addWidget(self._sb_fg, 1)
         sb.addPermanentWidget(self._sb_apps)
 
     # ------------------------------------------------------------------
@@ -581,6 +591,25 @@ class MainWindow(QtWidgets.QMainWindow):
             self._sb_apps.setText("🖥 未检测到已知热键软件")
             self._sb_apps.setToolTip("")
 
+    def _update_foreground(self) -> None:
+        """定时刷新状态栏的前台焦点应用提示(已知热键软件高亮提醒)。
+
+        offscreen / Session 0 下 get_foreground 返回空,标签留空,不影响。
+        """
+        try:
+            name, known = get_foreground_hotkey_hint()
+        except Exception:  # noqa: BLE001  Win32 调用失败时静默置空
+            name, known = "", False
+        if not name:
+            self._sb_fg.setText("")
+            return
+        if known:
+            self._sb_fg.setText(f"🎯 当前焦点:{name}(已知热键软件)")
+            self._sb_fg.setStyleSheet("color:#dc2626;font-weight:600;")
+        else:
+            self._sb_fg.setText(f"当前焦点:{name}")
+            self._sb_fg.setStyleSheet("color:#6b7480;")
+
     # ------------------------------------------------------------------
     # 单点检测 / 详情面板
     # ------------------------------------------------------------------
@@ -735,6 +764,7 @@ class MainWindow(QtWidgets.QMainWindow):
             self._thread.request_stop()
             self._thread.wait(3000)
         self._flush_timer.stop()
+        self._fg_timer.stop()
         super().closeEvent(event)
 
 
