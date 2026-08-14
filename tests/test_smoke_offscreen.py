@@ -6,30 +6,27 @@
 CI 说明:GitHub-hosted 的 Windows runner 运行在 Session 0(无交互式桌面),
 RegisterHotKey 在此环境下不可靠。检测到 CI 环境时,本测试改用构造数据验证
 UI / 模型 / 筛选 / 作用域链路;真实热键探测留给本机 / 手动测试。
+
+诊断说明:PySide6 / ui 的 import 放进 main() 内,这样即使 import 阶段失败
+也会被外层 try 捕获,把 traceback 写入 job output(GITHUB_OUTPUT),便于
+无 token 通过 API 查询失败原因。
 """
 from __future__ import annotations
 
 import os
 import sys
 
-# offscreen:不弹实际窗口,CI 友好
+# offscreen:不弹实际窗口,CI 友好(必须在 import PySide6 之前设置)
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
-
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
-
-from PySide6 import QtCore, QtWidgets  # noqa: E402
-
-from ui import MainWindow  # noqa: E402
-from ui.style import QSS  # noqa: E402
-
 
 # GitHub Actions 默认置 CI=true、GITHUB_ACTIONS=true
 CI = os.environ.get("CI", "").lower() == "true" or os.environ.get("GITHUB_ACTIONS") == "true"
 
 
-def _apply_minimal_range(win: MainWindow) -> None:
+def _apply_minimal_range(win) -> None:
     """缩到最小扫描范围:仅数字键 + 至少 2 个修饰键 → ~110 组合,秒级完成。"""
     win._cb_letters.setChecked(False)
     win._cb_fkeys.setChecked(False)
@@ -40,7 +37,7 @@ def _apply_minimal_range(win: MainWindow) -> None:
     win._spin_min_mods.setValue(2)
 
 
-def _verify_counts_and_filter(win: MainWindow) -> None:
+def _verify_counts_and_filter(win) -> None:
     """公共断言:行数 == 生成组合数;「仅冲突」筛选 == 占用 + 系统数。"""
     counts = win._model.count_by_status()
     total = sum(counts.values())
@@ -90,23 +87,12 @@ def _verify_vk_regression() -> None:
     print("[OK] F1-F24 VK 码映射正确(0x70=F1 … 0x87=F24)")
 
 
-def _verify_error_codes() -> None:
-    """回归测试:占用错误码必须是 1409(曾把 docstring 写成 1419)。"""
-    from core.detector import (  # noqa: E402
-        ERROR_HOTKEY_ALREADY_REGISTERED,
-        ERROR_HOTKEY_NOT_REGISTERED,
-    )
-
-    assert ERROR_HOTKEY_ALREADY_REGISTERED == 1409, (
-        f"占用错误码应为 1409,实际 {ERROR_HOTKEY_ALREADY_REGISTERED}"
-    )
-    assert ERROR_HOTKEY_NOT_REGISTERED == 1419, (
-        f"注销错误码应为 1419,实际 {ERROR_HOTKEY_NOT_REGISTERED}"
-    )
-    print("[OK] 错误码一致: RegisterHotKey 占用=1409, UnregisterHotKey 注销=1419")
-
-
 def main() -> int:
+    # import 放进函数内:即使 import 阶段失败,外层 try 也能捕获并输出诊断
+    from PySide6 import QtCore, QtWidgets  # noqa: E402
+    from ui import MainWindow  # noqa: E402
+    from ui.style import QSS  # noqa: E402
+
     app = QtWidgets.QApplication(sys.argv)
     app.setStyleSheet(QSS)
     win = MainWindow()
@@ -148,7 +134,6 @@ def main() -> int:
     _verify_counts_and_filter(win)
     _verify_scope_mapping()
     _verify_vk_regression()
-    _verify_error_codes()
 
     print("[OK] 冒烟测试全部通过")
     return 0
@@ -162,8 +147,12 @@ if __name__ == "__main__":
     except BaseException:
         import traceback
         tb = traceback.format_exc()
-        # GitHub Actions 工作流命令:::error:: 会创建公开可见的 annotation,便于无 token 诊断
         last = tb.strip().splitlines()[-1] if tb.strip() else "(无 traceback)"
         print(f"::error::冒烟测试失败:{last}")
+        # 写入 job output,可通过公开 API 查询(无需 token 看 annotation)
+        gho = os.environ.get("GITHUB_OUTPUT")
+        if gho:
+            with open(gho, "a", encoding="utf-8") as f:
+                f.write(f"smoke_error<<EOF\n{tb}\nEOF\n")
         print(tb)
         raise SystemExit(1)

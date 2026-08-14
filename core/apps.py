@@ -2,7 +2,10 @@
 
 Windows 不提供"哪个进程注册了哪个全局热键"的 API,因此来源识别只能做推断:
 1. 进程扫描:枚举正在运行的可执行文件,匹配一份"已知会注册全局热键的软件"清单。
-2. 已知热键映射:对常见软件的默认热键做硬编码映射,扫描到 OCCUPIED 时查表给出候选。
+2. 已知热键映射:对常见软件的默认热键做映射,扫描到 OCCUPIED 时查表给出候选。
+
+数据源(内置 + 用户扩展)见 core/_known_data:内置常量随包打包,
+用户可在 ~/.hotkey_detector/user_hotkeys.json 追加自定义条目,与内置合并。
 
 注意:推断结果不保证准确——用户可能改过快捷键,或软件热键来自配置文件。
 UI 中一律显示为"可能来自 X",仅供排障参考。
@@ -13,95 +16,36 @@ import ctypes
 from ctypes import wintypes
 from dataclasses import dataclass
 
-from .hotkeys import (
-    HotkeyCombo,
-    MOD_ALT,
-    MOD_CONTROL,
-    MOD_SHIFT,
-    MOD_WIN,
-    modifier_name,
-    vk_name,
+from ._known_data import (
+    KNOWN_APPS,
+    KNOWN_HOTKEYS,
+    KnownApp,
+    KnownHotkey,
+    invalidate_merged_cache,
+    merged_known_apps,
+    merged_known_hotkeys,
 )
+from .hotkeys import HotkeyCombo
 
 
 # ---------------------------------------------------------------------------
-# 已知热键软件:进程名(小写) → 应用展示名
+# 数据源:re-export 自 _known_data(保持向后兼容的导入路径)
 # ---------------------------------------------------------------------------
-@dataclass(frozen=True)
-class KnownApp:
-    name: str          # 展示名
-    processes: tuple[str, ...]  # 可能的进程名(小写)
-
-
-KNOWN_APPS: tuple[KnownApp, ...] = (
-    KnownApp("Microsoft PowerToys", ("powertoys.exe", "fancyzones.exe", "keyboardmanagerengine.exe", "powerlauncher.exe")),
-    KnownApp("AutoHotkey", ("autohotkey.exe", "autohotkey64.exe", "autohotkey32.exe", "autohotkey64_unicode.exe")),
-    KnownApp("微信 WeChat", ("wechat.exe",)),
-    KnownApp("QQ", ("qq.exe",)),
-    KnownApp("TIM", ("tim.exe",)),
-    KnownApp("钉钉 DingTalk", ("dingtalk.exe", "dingtalklauncher.exe")),
-    KnownApp("企业微信", ("wxwork.exe",)),
-    KnownApp("Snipaste", ("snipaste.exe",)),
-    KnownApp("ShareX", ("sharex.exe",)),
-    KnownApp("Windows 截图工具", ("snippingtool.exe", "screenclippinghost.exe")),
-    KnownApp("Everything", ("everything.exe",)),
-    KnownApp("Listary", ("listary.exe",)),
-    KnownApp("Flow Launcher", ("flow.launcher.exe",)),
-    KnownApp("Wox", ("wox.exe",)),
-    KnownApp("uTools", ("utools.exe",)),
-    KnownApp("Quicker", ("quicker.exe",)),
-    KnownApp("网易云音乐", ("cloudmusic.exe",)),
-    KnownApp("QQ音乐", ("qqmusic.exe",)),
-    KnownApp("PotPlayer", ("potplayermini64.exe", "potplayermini.exe", "potplayer.exe")),
-    KnownApp("VLC", ("vlc.exe",)),
-    KnownApp("OBS Studio", ("obs64.exe", "obs32.exe")),
-    KnownApp("Bandicam", ("bdcam.exe",)),
-    KnownApp("Ditto(剪贴板)", ("ditto.exe",)),
-    KnownApp("腾讯会议", ("wemeetapp.exe",)),
-    KnownApp("Zoom", ("zoom.exe",)),
-    KnownApp("网易有道词典", ("youdaodict.exe",)),
-    KnownApp("火绒安全", ("hipstray.exe", "hipsdaemon.exe", "usysdiag.exe")),
-    KnownApp("360 系列", ("360tray.exe", "360safe.exe", "zhudongfangyu.exe")),
-    KnownApp("搜狗输入法", ("sogoucloud.exe", "sgtool.exe", "soGouSvc.exe")),
-    KnownApp("Fluent Search", ("fluentsearch.exe",)),
-    KnownApp("Raycast(若跨平台)", ("raycast.exe",)),
-)
-
-
-# ---------------------------------------------------------------------------
-# 已知默认热键:(modifiers, vk) → 候选来源描述
-# 多个软件可能用同一组合时,都列出。键名仅供参考。
-# ---------------------------------------------------------------------------
-@dataclass(frozen=True)
-class KnownHotkey:
-    """一条已知软件默认热键记录。"""
-
-    app: str                    # 展示名
-    action: str                 # 功能描述
-    processes: tuple[str, ...]  # 判断"是否在运行"用的进程名(小写)
-
-
-# 已知软件的默认全局热键 → 应用记录(用于来源证据链推断)
-# 注意:这是"默认值",用户可能改过;仅作排障参考。
-KNOWN_HOTKEYS: dict[tuple[int, int], tuple[KnownHotkey, ...]] = {
-    (MOD_CONTROL | MOD_ALT, 0x41): (KnownHotkey("QQ", "截图", ("qq.exe",)),),
-    (MOD_ALT, 0x41): (
-        KnownHotkey("微信", "截图", ("wechat.exe",)),
-        KnownHotkey("企业微信", "截图", ("wxwork.exe",)),
-    ),
-    (MOD_CONTROL | MOD_SHIFT, 0x41): (KnownHotkey("钉钉", "截图", ("dingtalk.exe", "dingtalklauncher.exe")),),
-    (MOD_WIN | MOD_SHIFT, 0x53): (KnownHotkey("Windows 截图工具", "截图", ("snippingtool.exe", "screenclippinghost.exe")),),
-    (MOD_ALT, 0x20): (
-        KnownHotkey("PowerToys Run", "启动器", ("powerlauncher.exe", "powertoys.exe")),
-        KnownHotkey("Flow Launcher", "启动器", ("flow.launcher.exe",)),
-        KnownHotkey("uTools", "启动器", ("utools.exe",)),
-    ),
-    (MOD_CONTROL | MOD_ALT, 0x55): (KnownHotkey("uTools", "超级面板", ("utools.exe",)),),
-    (MOD_CONTROL, 0xC0): (KnownHotkey("Ditto", "剪贴板", ("ditto.exe",)),),
-    (MOD_CONTROL | MOD_ALT, 0x44): (KnownHotkey("网易有道词典", "划词", ("youdaodict.exe",)),),
-    (MOD_WIN | MOD_SHIFT, 0x46): (KnownHotkey("Snipaste", "截图", ("snipaste.exe",)),),
-    (MOD_CONTROL | MOD_SHIFT | MOD_ALT, 0x53): (KnownHotkey("ShareX", "截图", ("sharex.exe",)),),
-}
+__all__ = [
+    "KNOWN_APPS",
+    "KNOWN_HOTKEYS",
+    "KnownApp",
+    "KnownHotkey",
+    "RunningApp",
+    "Evidence",
+    "list_process_names",
+    "refresh_running_processes",
+    "scan_running_hotkey_apps",
+    "build_evidence",
+    "guess_source",
+    "dump_running_apps",
+    "reload_known_data",
+]
 
 
 @dataclass
@@ -197,7 +141,7 @@ def scan_running_hotkey_apps() -> list[RunningApp]:
     running = refresh_running_processes()
     found: list[RunningApp] = []
     seen: set[str] = set()
-    for app in KNOWN_APPS:
+    for app in merged_known_apps():
         for proc in app.processes:
             if proc in running and app.name not in seen:
                 found.append(RunningApp(name=app.name, matched=proc))
@@ -214,8 +158,9 @@ def build_evidence(combo: HotkeyCombo) -> Evidence | None:
 
     置信度依据:命中已知默认热键(★2)+ 该软件进程在运行(★2)+ 探测到注册失败(★1)。
     Windows 不提供"哪个进程占用"的 API,故即便全部命中也只能到 5★,无法"已确认"。
+    已知热键库 = 内置 + 用户扩展(merged_known_hotkeys)。
     """
-    matches = KNOWN_HOTKEYS.get((combo.modifiers, combo.vk))
+    matches = merged_known_hotkeys().get((combo.modifiers, combo.vk))
     if not matches:
         return None
     kh = matches[0]  # 多候选时取首个,详情面板可展开全部
@@ -237,25 +182,14 @@ def guess_source(combo: HotkeyCombo) -> str:
     return ev.summary if ev else ""
 
 
+def reload_known_data() -> None:
+    """用户编辑 user_hotkeys.json 后调用:清合并缓存,下次查询重新加载。"""
+    invalidate_merged_cache()
+
+
 # ---------------------------------------------------------------------------
 # 调试用:打印当前运行的热键软件
 # ---------------------------------------------------------------------------
 def dump_running_apps() -> str:
     lines = [str(app) for app in scan_running_hotkey_apps()]
     return "\n".join(lines) if lines else "(未检测到已知热键软件)"
-
-
-__all__ = [
-    "KNOWN_APPS",
-    "KNOWN_HOTKEYS",
-    "KnownApp",
-    "KnownHotkey",
-    "RunningApp",
-    "Evidence",
-    "list_process_names",
-    "refresh_running_processes",
-    "scan_running_hotkey_apps",
-    "build_evidence",
-    "guess_source",
-    "dump_running_apps",
-]

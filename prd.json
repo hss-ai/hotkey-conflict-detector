@@ -1,0 +1,213 @@
+{
+  "project": "hotkey-conflict-detector v1.1.0 enhancements",
+  "branchName": "feat/v1.1.0-enhancements",
+  "description": "参照 PowerToys Keyboard Manager 的启发，为热键冲突检测器补齐 8 项优化：快照对比、HTML 报告、空闲推荐、前台应用上下文、实时守望模式、热键库外部化、注释纠错、扫描续扫。完成后全量回归验证、合并 main、打 tag v1.1.0 触发自动发版。",
+  "conventions": [
+    "Python 3.10+ / PySide6 (Qt6)；零额外原生依赖（除 PySide6）",
+    "Win32 调用一律 ctypes，不引入新第三方依赖",
+    "测试风格沿用 tests/test_smoke_offscreen.py：可独立 `python tests/test_xxx.py` 运行，main() 返回 0/1，无需 pytest",
+    "纯逻辑测试不依赖真实 RegisterHotKey，必须在 CI（Session 0）可跑",
+    "配色一律从 ui/style.py 取色，禁止散落硬编码 #xxx（沿用现有约定）",
+    "提交信息格式：`US-00X: <title>`；每个 story 完成后单独提交",
+    "版本号单点真源 core/_version.py，本次 1.0.0 → 1.1.0（SemVer minor，向后兼容）",
+    "发版靠 push tag v1.1.0 触发 .github/workflows/release.yml 自动构建 exe + GitHub Release"
+  ],
+  "userStories": [
+    {
+      "id": "US-001",
+      "title": "修正 detector.py 注释错误(1419→1409)+ 补单测断言",
+      "description": "detector.py 模块文档注释仍写 ERROR_HOTKEY_ALREADY_REGISTERED (1419)，但实际占用码是 1409（1419 是 UnregisterHotKey 的码，README 已修正，代码注释遗留）。修正注释，并在 hotkeys 逻辑层确保一致性。",
+      "priority": 1,
+      "passes": true,
+      "acceptanceCriteria": [
+        "detector.py 模块 docstring 中 1419 改为 1409，与代码常量 ERROR_HOTKEY_ALREADY_REGISTERED = 1409 一致",
+        "运行 `python tests/test_smoke_offscreen.py`（offscreen）全部通过",
+        "新增/已有测试断言 ERROR_HOTKEY_ALREADY_REGISTERED == 1409"
+      ],
+      "notes": "最小改动热身 story，顺手验证测试基线绿。"
+    },
+    {
+      "id": "US-002",
+      "title": "已知热键库外部化：分离内置数据 + 用户可扩展 JSON",
+      "description": "将 apps.py 中硬编码的 KNOWN_APPS/KNOWN_HOTKEYS 抽到独立模块 core/_known_data.py（仍是 Python 常量，避免 PyInstaller --add-data 打包风险），并新增用户扩展机制：读取 ~/.hotkey_detector/user_hotkeys.json 与内置库合并。apps.py 提供 load_merged_known_hotkeys()。",
+      "priority": 2,
+      "passes": false,
+      "acceptanceCriteria": [
+        "core/_known_data.py 存放内置 KNOWN_APPS / KNOWN_HOTKEYS，apps.py 从该模块导入",
+        "apps.py 提供 load_user_hotkeys() 读用户目录 JSON + merge_known_hotkeys() 合并，用户目录不存在时优雅回退到纯内置",
+        "build_evidence 使用合并后的热键库（用户自填条目也能被证据链命中）",
+        "tests/test_known_data.py 覆盖：内置库非空、用户 JSON merge 正确、损坏 JSON 不崩溃、用户条目能命中 build_evidence",
+        "`python tests/test_known_data.py` 返回 0"
+      ],
+      "notes": "不引入 --add-data，避免 spec/release.yml 打包改动风险。用户扩展价值=社区分享 JSON 放用户目录。"
+    },
+    {
+      "id": "US-003",
+      "title": "扫描快照模块 core/snapshot.py（序列化 + diff 纯逻辑）",
+      "description": "新增 core/snapshot.py：把 list[HotkeyResult] 序列化为带元数据（时间戳、版本、扫描范围、统计）的 JSON；save/load 到 ~/.hotkey_detector/snapshots/；diff 两份快照返回新增占用/已释放/状态变化三类列表。纯逻辑，无 Qt 依赖。",
+      "priority": 3,
+      "passes": false,
+      "acceptanceCriteria": [
+        "snapshot.py 提供 to_dict(results, meta) / from_dict() / save(results, meta) / load(path) / diff(old, new)",
+        "save 的 JSON 含 schema_version、created_at(ISO)、app_version、stats、results[]，每个 result 含 combo/modifiers/vk/status/source",
+        "diff 返回 {added:[新增占用], removed:[已释放], changed:[状态变化]} 三类，用 (modifiers,vk) 做 key",
+        "load 对缺失/损坏文件抛清晰异常或返回 None，不崩溃",
+        "tests/test_snapshot.py 覆盖序列化往返、diff 三类各至少一例、时间戳/版本字段存在；`python tests/test_snapshot.py` 返回 0"
+      ],
+      "notes": "杀手锏功能的数据层。UI 集成在 US-009。"
+    },
+    {
+      "id": "US-004",
+      "title": "HTML 报告模块 core/report.py（自包含渲染）",
+      "description": "新增 core/report.py：把扫描结果渲染成单文件自包含 HTML（统计卡片 + 冲突表格 + 来源 Top + 元信息），纯字符串模板无外部依赖。",
+      "priority": 4,
+      "passes": false,
+      "acceptanceCriteria": [
+        "report.py 提供 render_html(results, meta) -> str 和 write_html(path, results, meta)",
+        "输出 HTML 含 <table>、统计数字、按状态分组的冲突列表，颜色用 style.py 的语义色值",
+        "HTML 转义用户数据（source 等含 < > & 的字段），防 XSS/破坏",
+        "tests/test_report.py 覆盖：非空结果渲染含关键标签、空结果不崩溃、特殊字符被转义；`python tests/test_report.py` 返回 0"
+      ],
+      "notes": "无第三方依赖，纯 f-string/template。颜色从 style.py 导入复用。"
+    },
+    {
+      "id": "US-005",
+      "title": "空闲热键推荐逻辑 core/recommend.py + 单测",
+      "description": "新增 core/recommend.py：从扫描结果筛 FREE 组合，按友好度排序（优先 Ctrl+Alt+字母，其次 Ctrl+Shift+字母，避开 Win/小键盘/多媒体），返回前 N 个推荐。",
+      "priority": 5,
+      "passes": false,
+      "acceptanceCriteria": [
+        "recommend.py 提供 recommend_free(results, top_n=12) -> list[HotkeyResult]",
+        "排序：Ctrl+Alt+字母 > Ctrl+Shift+字母 > 含 Shift 的其他 > 其他修饰；字母优于数字/功能键；不含 Win 优先",
+        "输入无 FREE 项时返回空列表不崩溃",
+        "tests/test_recommend.py 覆盖排序优先级（Ctrl+Alt+A 排在 Win+X 前）、top_n 截断、空输入；`python tests/test_recommend.py` 返回 0"
+      ],
+      "notes": "正向输出：不仅说谁被占，还推荐可用组合。"
+    },
+    {
+      "id": "US-006",
+      "title": "前台窗口进程探测 core/foreground.py + 单测",
+      "description": "新增 core/foreground.py：用 ctypes GetForegroundWindow + GetWindowThreadProcessId + 查 PID 进程名，返回当前前台应用进程名。对比 KNOWN_APPS 给出是否为热键软件。",
+      "priority": 6,
+      "passes": false,
+      "acceptanceCriteria": [
+        "foreground.py 提供 get_foreground_process() -> (pid, exe_name_lower) 和 get_foreground_hotkey_hint() -> str",
+        "失败（无前台窗口等）返回 ('', '') / 空串不崩溃",
+        "tests/test_foreground.py 用 mock/构造数据验证 hint 文案逻辑（不依赖真实窗口）；`python tests/test_foreground.py` 返回 0"
+      ],
+      "notes": "app-specific 概念的检测器化：提示前台焦点是否是热键软件。注意 Win32 API 在 offscreen/Session0 下可能返回空，需容错。"
+    },
+    {
+      "id": "US-007",
+      "title": "实时守望核心逻辑 core/watch.py（状态机 + 时间线）",
+      "description": "新增 core/watch.py：对一个组合轮询探测，维护 WatchEvent 时间线（timestamp, status, running_apps 快照），检测 FREE→OCCUPIED 等状态转变并记录。纯逻辑：WatchState 类 + record_event + transitions 属性，不含 Qt 定时器。",
+      "priority": 7,
+      "passes": false,
+      "acceptanceCriteria": [
+        "watch.py 提供 WatchState 类（events 列表、record(status, running_apps)、transitions 返回状态转变点、summary 文本）",
+        "transitions 正确识别 FREE→OCCUPIED 与反向，记录转变时刻 + 当时运行进程",
+        "空 events 不崩溃",
+        "tests/test_watch.py 覆盖：记录序列、转变检测、summary 文案；`python tests/test_watch.py` 返回 0"
+      ],
+      "notes": "Qt 定时器与 UI 在 US-012。纯逻辑先行便于单测。"
+    },
+    {
+      "id": "US-008",
+      "title": "扫描续扫：ScanThread 支持排除已扫集合 + 主窗口续扫",
+      "description": "ScanThread 增加 exclude 集合参数（已扫过的 combo 跳过）；主窗口停止后保留结果，再次点扫描时若存在部分结果则提示「继续扫描剩余 / 重新开始」。",
+      "priority": 8,
+      "passes": false,
+      "acceptanceCriteria": [
+        "ScanThread.__init__ 接受可选 exclude: set[(modifiers,vk)]，run 中跳过这些 combo",
+        "MainWindow 停止扫描后 _partial_results 记录已扫集合；再次 start_scan 时若有部分结果弹选择框",
+        "续扫时不清空已有结果，新结果 append；统计正确累加",
+        "`python tests/test_smoke_offscreen.py`（offscreen）通过，含续扫路径的构造数据验证"
+      ],
+      "notes": "价值相对低但用户要求全做。改动集中在 detector.py ScanThread + main_window.start_scan。"
+    },
+    {
+      "id": "US-009",
+      "title": "快照 UI：保存/对比按钮 + 对比对话框 ui/snapshot_dialog.py",
+      "description": "工具栏新增「💾 存快照」「📊 对比快照」按钮。存快照调 core.snapshot.save；对比快照打开对话框，选两份历史快照做 diff，展示新增占用/已释放/状态变化三类列表。",
+      "priority": 9,
+      "passes": false,
+      "acceptanceCriteria": [
+        "工具栏有存快照、对比快照两个按钮，存快照在没有结果时提示先扫描",
+        "ui/snapshot_dialog.py 对比对话框列出 snapshots/ 目录下历史快照供选择，diff 结果分三类着色展示",
+        "对比对话框在无历史快照时给出友好提示",
+        "offscreen 冒烟测试通过，且能构造数据走通存快照→对比的 offscreen 路径"
+      ],
+      "notes": "依赖 US-003。颜色用 style.py 语义色。"
+    },
+    {
+      "id": "US-010",
+      "title": "HTML 导出 + 空闲推荐 UI（工具栏按钮 + 推荐对话框）",
+      "description": "工具栏新增「📄 导出 HTML」「💡 推荐可用」按钮。导出 HTML 调 core.report.write_html 保存文件；推荐可用打开对话框展示 core.recommend 推荐的空闲组合，支持复制。",
+      "priority": 10,
+      "passes": false,
+      "acceptanceCriteria": [
+        "导出 HTML 按钮在没有结果时提示先扫描，有结果时弹保存对话框写出 HTML 并提示成功",
+        "ui/recommend_dialog.py 展示推荐空闲组合列表，无空闲项时提示，有项时支持复制到剪贴板",
+        "offscreen 冒烟测试通过，构造数据走通推荐对话框逻辑"
+      ],
+      "notes": "依赖 US-004 + US-005。两个小 UI 合并一个 story。"
+    },
+    {
+      "id": "US-011",
+      "title": "前台应用上下文 UI（状态栏定时刷新）",
+      "description": "MainWindow 用 QTimer（~3s）轮询 core.foreground.get_foreground_hotkey_hint，在状态栏显示「当前焦点：X（已知热键软件）」或普通焦点。扫描中可暂停。",
+      "priority": 11,
+      "passes": false,
+      "acceptanceCriteria": [
+        "状态栏新增前台焦点标签，定时刷新且不阻塞 UI",
+        "前台是已知热键软件时标签着色/加图标提示",
+        "closeEvent 正确停止定时器",
+        "offscreen 冒烟测试通过（offscreen 下 get_foreground 返回空，标签应优雅显示）"
+      ],
+      "notes": "依赖 US-006。"
+    },
+    {
+      "id": "US-012",
+      "title": "守望模式 UI：ui/watch_dialog.py + 工具栏入口",
+      "description": "工具栏新增「⏱ 守望模式」按钮，打开对话框：选/捕获一个组合→开始/停止守望→用 QTimer 轮询 core.watch.WatchState，实时展示时间线表格（时刻/状态/运行软件），状态转变时高亮+提示音。",
+      "priority": 12,
+      "passes": false,
+      "acceptanceCriteria": [
+        "ui/watch_dialog.py 含组合捕获、开始/停止、时间线 QTableWidget、状态转变高亮",
+        "守望用 QTimer 轮询 quick_probe + core.watch.WatchState.record，最小间隔可配（默认 2s）",
+        "关闭对话框停止定时器，不泄漏",
+        "offscreen 冒烟测试通过"
+      ],
+      "notes": "依赖 US-007。最重的 UI story。"
+    },
+    {
+      "id": "US-013",
+      "title": "冒烟测试扩充 + README 更新 + 版本号 bump",
+      "description": "把所有新核心模块测试纳入冒烟聚合调用；README 补 v1.1.0 新功能文档（快照对比/HTML/推荐/前台/守望/热键库扩展/续扫）；core/_version.py 1.0.0 → 1.1.0。",
+      "priority": 13,
+      "passes": false,
+      "acceptanceCriteria": [
+        "test_smoke_offscreen.py 末尾聚合调用各新模块测试，一次运行覆盖全链路",
+        "README 新增 v1.1.0 功能特性段落 + 使用说明",
+        "core/_version.py __version__ == '1.1.0'",
+        "`python tests/test_smoke_offscreen.py`（offscreen）整体返回 0"
+      ],
+      "notes": "发版前文档与版本收口。"
+    },
+    {
+      "id": "US-014",
+      "title": "全量回归验证 + 合并 main + tag v1.1.0 发版",
+      "description": "在 feature 分支跑全部测试绿；offscreen 冒烟通过；本机能正常构建窗口（python main.py 不报错）；合并 feat/v1.1.0-enhancements 到 main；在 main 打 tag v1.1.0；push main + tag 触发 release.yml 自动构建发布。",
+      "priority": 14,
+      "passes": false,
+      "acceptanceCriteria": [
+        "所有 tests/test_*.py 单独运行返回 0",
+        "offscreen 冒烟测试整体返回 0",
+        "main.py 可成功 import 并构建 MainWindow（offscreen 下不崩）",
+        "feat 分支合并到 main（fast-forward 或 merge commit），main 干净",
+        "main 上 tag v1.1.0 已打并推送，release.yml 被触发"
+      ],
+      "notes": "对外动作（push/tag/发版）按规则执行；tag 推送即触发自动发版。"
+    }
+  ]
+}

@@ -9,6 +9,8 @@ on:
 jobs:
   smoke:
     runs-on: windows-latest
+    outputs:
+      smoke_error: ${{ steps.smoke.outputs.smoke_error }}
     steps:
       - uses: actions/checkout@v4
 
@@ -24,6 +26,7 @@ jobs:
           pip install -r requirements.txt
 
       - name: 离屏冒烟测试(CI 友好,不实际注册热键)
+        id: smoke
         env:
           QT_QPA_PLATFORM: offscreen
         run: python tests/test_smoke_offscreen.py

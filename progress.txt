@@ -1,0 +1,18 @@
+# progress.txt — hotkey-conflict-detector v1.1.0 longtask loop
+# 每个 story 完成后追加一条。Settle 时提炼到 AGENTS.md 后可裁剪。
+
+[init] 2026-08-14
+- 已读全项目：core/{_version,hotkeys,detector,apps,__init__}.py、ui/{main_window,models,style,detail_dialog,locate_dialog,__init__}.py、tests/test_smoke_offscreen.py、main.py、.github/workflows/{ci,release}.yml
+- 架构理解：core 纯检测（RegisterHotKey 试探 + toolhelp32 进程扫描）+ PySide6 UI（QThread 扫描 + 50ms 节流批量刷表）+ offscreen 冒烟测试（CI Session0 用构造数据，本机真实扫描）
+- 版本机制：core/_version.py 单点真源，tag vX.Y.Z 触发 release.yml 自动 PyInstaller 构建 exe + GitHub Release
+- 已建分支 feat/v1.1.0-enhancements（遵循"默认分支先开分支"）
+- prd.json 14 个 story 已规划，按 数据层(US-002~007) → 扫描增强(US-008) → UI 集成(US-009~012) → 收口发版(US-013~014) 排序
+
+关键约束（每个 story 记住）：
+- 零新第三方依赖（除 PySide6），Win32 一律 ctypes
+- 配色从 ui/style.py 取，不散落硬编码 #xxx
+- 测试风格：tests/test_xxx.py 可独立 `python` 运行，main() 返回 0/1，无需 pytest
+- 纯逻辑测试必须 CI(Session0) 可跑，不依赖真实 RegisterHotKey
+- 提交信息 US-00X: <title>
+
+下一个迭代：US-001（最小热身，验证测试基线绿）
