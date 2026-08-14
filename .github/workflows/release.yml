@@ -1,0 +1,74 @@
+name: Release
+
+# 触发条件:
+#   1. 推送 v* 形式的 tag(如 v1.0.0)—— 主流程,自动构建 exe 并发布 Release
+#   2. workflow_dispatch —— 手动触发,仅构建产物(不发 Release),用于验证打包流程
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write   # 发布 Release 需要写权限
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 配置 Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: 安装依赖
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pyinstaller
+
+      - name: 读取版本号
+        id: version
+        shell: python
+        run: |
+          import re
+          tag = "${{ github.ref_name }}"   # 形如 v1.0.0;手动触发时为空
+          src = open("core/_version.py", encoding="utf-8").read()
+          ver = re.search(r'__version__\s*=\s*["\']([^"\']+)["\']', src).group(1)
+          print(f"value={ver}")
+          print(f"name=HotkeyConflictDetector-{ver}-windows-x64.exe")
+          with open("$GITHUB_OUTPUT", "a", encoding="utf-8") as f:
+              f.write(f"value={ver}\n")
+              f.write(f"name=HotkeyConflictDetector-{ver}-windows-x64.exe\n")
+
+      - name: 构建 exe
+        run: >
+          pyinstaller --noconsole --onefile --clean
+          --name HotkeyConflictDetector
+          main.py
+
+      - name: 重命名(带版本号)
+        shell: pwsh
+        run: |
+          Move-Item dist/HotkeyConflictDetector.exe `
+            "dist/${{ steps.version.outputs.name }}" -Force
+
+      - name: 上传构建产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: HotkeyConflictDetector-windows-x64
+          path: dist/${{ steps.version.outputs.name }}
+
+      - name: 发布 GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/${{ steps.version.outputs.name }}
+          name: ${{ github.ref_name }}
+          generate_release_notes: true
+          draft: false
+          prerelease: false

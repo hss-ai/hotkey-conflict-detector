@@ -19,15 +19,18 @@ def main() -> int:
 
     from PySide6 import QtWidgets
 
+    from core._version import __version__
     from ui import MainWindow
     from ui.style import QSS
 
     app = QtWidgets.QApplication(sys.argv)
     app.setApplicationName("全局热键冲突检测器")
+    app.setApplicationVersion(__version__)
     app.setOrganizationName("HotkeyConflictDetector")
     app.setStyleSheet(QSS)
 
     win = MainWindow()
+    win.setWindowTitle(f"全局热键冲突检测器 v{__version__}")
     win.show()
     return app.exec()
 
