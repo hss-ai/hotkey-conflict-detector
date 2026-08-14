@@ -30,3 +30,9 @@
     ④ 友军改动是有益的(CI 诊断),保留不回滚。
 
 下一个迭代：US-003 快照模块 core/snapshot.py
+
+[US-003] done — core/snapshot.py(to_dict/save/load/diff/list_snapshots/snapshot_label)+ tests/test_snapshot.py 6 例；commit 532ca02
+[US-004] done — core/report.py(render_html/write_html 自包含 HTML,XSS 转义)+ tests/test_report.py 4 例；commit 即将
+  调试教训:MOD 位掩码 MOD_ALT=1/MOD_CONTROL=2/MOD_SHIFT=4/MOD_WIN=8,6=Ctrl+Shift 非 Ctrl+Alt;测试期望组合名字符串要对齐真实位掩码。
+
+下一个迭代：US-005 空闲推荐逻辑 core/recommend.py

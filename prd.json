@@ -61,7 +61,7 @@
       "title": "HTML 报告模块 core/report.py（自包含渲染）",
       "description": "新增 core/report.py：把扫描结果渲染成单文件自包含 HTML（统计卡片 + 冲突表格 + 来源 Top + 元信息），纯字符串模板无外部依赖。",
       "priority": 4,
-      "passes": false,
+      "passes": true,
       "acceptanceCriteria": [
         "report.py 提供 render_html(results, meta) -> str 和 write_html(path, results, meta)",
         "输出 HTML 含 <table>、统计数字、按状态分组的冲突列表，颜色用 style.py 的语义色值",
