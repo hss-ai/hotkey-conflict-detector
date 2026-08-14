@@ -9,6 +9,7 @@ from PySide6 import QtCore, QtGui, QtWidgets
 from core import HotkeyResult, HotkeyStatus
 from core.hotkeys import modifier_name, vk_name
 
+from .locate_dialog import LocateSourceDialog
 from .models import SCOPE_LABEL
 from .style import status_color
 
@@ -93,6 +94,11 @@ class DetailDialog(QtWidgets.QDialog):
 
         # 按钮
         btns = QtWidgets.QHBoxLayout()
+        if r.status == HotkeyStatus.OCCUPIED:
+            btn_locate = QtWidgets.QPushButton("🔎 定位占用来源")
+            btn_locate.setToolTip("Windows 不告知占用者,用二分定位法逐个排查")
+            btn_locate.clicked.connect(self._locate)
+            btns.addWidget(btn_locate)
         btns.addStretch(1)
         btn_copy = QtWidgets.QPushButton("📋 复制诊断信息")
         btn_copy.clicked.connect(self._copy)
@@ -143,6 +149,10 @@ class DetailDialog(QtWidgets.QDialog):
         if r.status == HotkeyStatus.ERROR:
             return "⚠ 探测异常,可能是无效组合或权限问题(尝试以管理员身份运行)。"
         return ""
+
+    def _locate(self) -> None:
+        """打开来源定位助手(二分定位:逐个关软件重测)。"""
+        LocateSourceDialog(self._result.combo, self).exec()
 
     def _copy(self) -> None:
         r = self._result

@@ -59,6 +59,16 @@ def main() -> int:
             dlg.grab().save(detail_path)
             print(f"[OK] 详情面板截图: {detail_path}")
             dlg.accept()
+        # 定位助手截图
+        from ui.locate_dialog import LocateSourceDialog  # noqa: E402
+        from core import HotkeyCombo  # noqa: E402
+        loc = LocateSourceDialog(HotkeyCombo(MOD_ALT, 0x41), win)
+        loc.show()
+        app.processEvents()
+        locate_path = os.path.join(ROOT, "assets", "locate.png")
+        loc.grab().save(locate_path)
+        print(f"[OK] 定位助手截图: {locate_path}")
+        loc.accept()
         counts = win._model.count_by_status()
         print("     状态分布:", {k.value: v for k, v in counts.items()})
         app.quit()
