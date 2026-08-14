@@ -74,6 +74,23 @@ def main() -> int:
     print(f"[OK] 「仅冲突」筛选显示 {shown} 行(冲突 {conflict_in_model})")
     win._proxy.set_conflict_only(False)
 
+    # 验证「作用域」列映射(不依赖真实扫描结果,直接构造各状态)
+    from core import HotkeyCombo, HotkeyResult, HotkeyStatus  # noqa: E402
+    from ui.models import COL_SCOPE, HotkeyTableModel  # noqa: E402
+
+    scope_model = HotkeyTableModel()
+    scope_model.reset_results([
+        HotkeyResult(HotkeyCombo(1, 0x41), HotkeyStatus.OCCUPIED, "x"),
+        HotkeyResult(HotkeyCombo(8, 0x44), HotkeyStatus.SYSTEM, ""),
+        HotkeyResult(HotkeyCombo(2, 0x42), HotkeyStatus.FREE, ""),
+        HotkeyResult(HotkeyCombo(4, 0x43), HotkeyStatus.ERROR, ""),
+    ])
+    scope_expect = {0: "全局占用", 1: "系统级", 2: "—", 3: "—"}
+    for row, want in scope_expect.items():
+        got = scope_model.index(row, COL_SCOPE).data()
+        assert got == want, f"作用域行{row}: 期望 {want!r}, 实际 {got!r}"
+    print("[OK] 作用域映射: OCCUPIED→全局占用 / SYSTEM→系统级 / FREE,ERROR→—")
+
     print("[OK] 冒烟测试全部通过")
     return 0
 

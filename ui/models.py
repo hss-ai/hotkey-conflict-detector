@@ -16,8 +16,8 @@ from .style import status_color
 
 
 # 列定义
-COLUMNS = ("组合", "修饰键", "按键", "状态", "可能来源")
-COL_COMBO, COL_MOD, COL_VK, COL_STATUS, COL_SOURCE = range(len(COLUMNS))
+COLUMNS = ("组合", "修饰键", "按键", "状态", "作用域", "可能来源")
+COL_COMBO, COL_MOD, COL_VK, COL_STATUS, COL_SCOPE, COL_SOURCE = range(len(COLUMNS))
 
 # 自定义角色:用于状态列按"冲突优先级"排序而非文字
 ROLE_SORT = QtCore.Qt.UserRole + 1
@@ -29,6 +29,14 @@ STATUS_ORDER = {
     HotkeyStatus.ERROR: 2,
     HotkeyStatus.FREE: 3,
     HotkeyStatus.SKIPPED: 4,
+}
+
+# 作用域标注:仅在被占用(冲突)时有意义,空闲等显示"—"
+# - 系统级:Windows 系统/Shell 保留(如 Win+D、Alt+Tab、Ctrl+Alt+Del)
+# - 全局占用:被程序注册或全局键盘钩子占用,在任何应用聚焦时都触发(=冲突真凶)
+SCOPE_LABEL = {
+    HotkeyStatus.SYSTEM: "系统级",
+    HotkeyStatus.OCCUPIED: "全局占用",
 }
 
 
@@ -61,12 +69,14 @@ class HotkeyTableModel(QtCore.QAbstractTableModel):
                 return vk_name(r.vk)
             if col == COL_STATUS:
                 return r.status.label
+            if col == COL_SCOPE:
+                return SCOPE_LABEL.get(r.status, "—")
             if col == COL_SOURCE:
                 return r.source or "—"
             return None
 
         if role == ROLE_SORT:
-            if col == COL_STATUS:
+            if col in (COL_STATUS, COL_SCOPE):
                 return STATUS_ORDER[r.status]
             if col == COL_MOD:
                 return r.modifiers  # 按位掩码排序
@@ -84,10 +94,17 @@ class HotkeyTableModel(QtCore.QAbstractTableModel):
                     HotkeyStatus.SKIPPED: "扫描被停止,未检测",
                 }.get(r.status, "")
                 return tip
+            if col == COL_SCOPE:
+                return (
+                    "作用域说明:\n"
+                    "• 系统级 — Windows 系统/Shell 保留,全局生效\n"
+                    "• 全局占用 — 程序注册或键盘钩子占用,在任何应用按都触发(冲突真凶)\n"
+                    "(应用内快捷键如 Word 的 Ctrl+B 只在该软件内生效,不占全局槽位,不检测)"
+                )
             if col == COL_SOURCE:
                 return r.source or "无已知来源匹配"
 
-        if col == COL_STATUS:
+        if col in (COL_STATUS, COL_SCOPE):
             if role == QtCore.Qt.ForegroundRole:
                 fg, _ = status_color(r.status.value)
                 return QtGui.QColor(fg)
@@ -97,7 +114,7 @@ class HotkeyTableModel(QtCore.QAbstractTableModel):
             if role == QtCore.Qt.TextAlignmentRole:
                 return int(QtCore.Qt.AlignCenter)
 
-        if role == QtCore.Qt.TextAlignmentRole and col in (COL_COMBO, COL_STATUS):
+        if role == QtCore.Qt.TextAlignmentRole and col == COL_COMBO:
             return int(QtCore.Qt.AlignCenter)
 
         return None
@@ -216,7 +233,9 @@ __all__ = [
     "COL_MOD",
     "COL_VK",
     "COL_STATUS",
+    "COL_SCOPE",
     "COL_SOURCE",
+    "SCOPE_LABEL",
     "HotkeyTableModel",
     "HotkeyFilterProxy",
 ]

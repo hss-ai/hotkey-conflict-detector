@@ -57,6 +57,15 @@ pip install -r requirements.txt
 python main.py
 ```
 
+### 打包成 exe(免 Python 运行)
+
+```bash
+pip install pyinstaller
+pyinstaller --noconsole --onefile --clean --name HotkeyConflictDetector main.py
+```
+
+生成 `dist/HotkeyConflictDetector.exe`(约 48MB),双击即可运行,无需安装 Python。
+
 ## 使用说明
 
 1. 在"扫描范围"勾选要检测的按键类别(默认全选)

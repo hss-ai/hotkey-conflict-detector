@@ -235,11 +235,20 @@ class MainWindow(QtWidgets.QMainWindow):
         view.setEditTriggers(QtWidgets.QAbstractItemView.NoEditTriggers)
         view.verticalHeader().setVisible(False)
         view.verticalHeader().setDefaultSectionSize(30)
-        view.horizontalHeader().setStretchLastSection(True)
-        view.horizontalHeader().setSectionResizeMode(0, QtWidgets.QHeaderView.ResizeToContents)
-        view.horizontalHeader().setSectionResizeMode(1, QtWidgets.QHeaderView.ResizeToContents)
-        view.horizontalHeader().setSectionResizeMode(2, QtWidgets.QHeaderView.ResizeToContents)
-        view.horizontalHeader().setSectionResizeMode(3, QtWidgets.QHeaderView.ResizeToContents)
+        # 固定列宽(Interactive)而非 ResizeToContents——后者在千行数据上每次窗口缩放
+        # 都要重新测量全部单元格,是缩放卡顿的主因;最后一列 Stretch 自适应剩余空间。
+        header = view.horizontalHeader()
+        header.setSectionResizeMode(0, QtWidgets.QHeaderView.Interactive)  # 组合
+        header.setSectionResizeMode(1, QtWidgets.QHeaderView.Interactive)  # 修饰键
+        header.setSectionResizeMode(2, QtWidgets.QHeaderView.Interactive)  # 按键
+        header.setSectionResizeMode(3, QtWidgets.QHeaderView.Interactive)  # 状态
+        header.setSectionResizeMode(4, QtWidgets.QHeaderView.Interactive)  # 作用域
+        header.setSectionResizeMode(5, QtWidgets.QHeaderView.Stretch)      # 可能来源
+        view.setColumnWidth(0, 150)  # 组合
+        view.setColumnWidth(1, 140)  # 修饰键(容纳 Ctrl+Alt+Shift)
+        view.setColumnWidth(2, 100)  # 按键(容纳 Backspace 等长键名)
+        view.setColumnWidth(3, 100)  # 状态
+        view.setColumnWidth(4, 100)  # 作用域
         view.setSortingEnabled(True)
         view.sortByColumn(COL_STATUS, QtCore.Qt.AscendingOrder)
         self._table = view
@@ -487,6 +496,12 @@ class MainWindow(QtWidgets.QMainWindow):
             "<p><b>原理</b>:逐个尝试注册候选热键组合,若失败说明已被占用"
             "(RegisterHotKey 探测法)。Windows 不提供「哪个进程占用哪个热键」的接口,"
             "来源识别为尽力推断。</p>"
+            "<p><b>「作用域」列说明</b>:"
+            "<br>• <b>系统级</b> = Windows 系统/Shell 保留(如 Win+D、Alt+Tab、Ctrl+Alt+Del),全局生效;"
+            "<br>• <b>全局占用</b> = 被程序注册或全局键盘钩子占用,在<b>任何</b>应用按下都会触发"
+            "——这才是会和其他快捷键冲突的来源。"
+            "<br>应用内快捷键(如 Word 的 Ctrl+B)只在那个软件激活时生效,不占用全局槽位、不会冲突,"
+            "因此不在检测范围。</p>"
             "<p><b>提示</b>:探测时会短暂占用目标组合(毫秒级),扫描很快,影响极小。</p>"
             "<p style='color:#888'>基于 Python + PySide6 · MIT License</p>",
         )

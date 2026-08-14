@@ -36,6 +36,8 @@ def main() -> int:
     win._cb_space.setChecked(False)
 
     def capture() -> None:
+        # 按组合名排序,让截图展示不同状态/作用域的混合行(而非默认"冲突在前")
+        win._table.sortByColumn(0, QtCore.Qt.AscendingOrder)
         pix = win.grab()
         out = os.path.join(ROOT, "assets", "preview.png")
         os.makedirs(os.path.dirname(out), exist_ok=True)
