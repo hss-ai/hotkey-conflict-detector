@@ -27,8 +27,9 @@ from .hotkeys import HotkeyCombo, SYSTEM_RESERVED
 # ---------------------------------------------------------------------------
 # Win32 绑定
 # ---------------------------------------------------------------------------
-ERROR_HOTKEY_ALREADY_REGISTERED = 1419  # 已被某程序占用
-ERROR_HOTKEY_NOT_REGISTERED = 1409  # 被 Windows Shell/系统保留,不可注册(常见 Win+* 组合)
+# 经实测确认(注册两次相同组合失败返回 1409;注销未注册项返回 1419):
+ERROR_HOTKEY_ALREADY_REGISTERED = 1409  # RegisterHotKey 失败的标准码(被占用)
+ERROR_HOTKEY_NOT_REGISTERED = 1419      # 仅 UnregisterHotKey 注销不存在项时返回
 ERROR_INVALID_PARAMETER = 87
 
 # use_last_error=True 让 ctypes.get_last_error() 能取到真实的 GetLastError 值
@@ -115,16 +116,18 @@ def _probe_raw(modifiers: int, vk: int) -> tuple[bool, int]:
 def _classify(ok: bool, err: int) -> HotkeyStatus:
     """把 (成功, 错误码) 归类为占用状态。
 
-    关键:last_error 在 API 成功时可能保留上一次的残留值(实测 1409 会残留),
+    关键 1:last_error 在 API 成功时可能保留上一次的残留值(实测会残留),
     因此**必须先看返回值 ok**,只有 ok=False 时错误码才有意义。
+    关键 2:RegisterHotKey 失败**统一返回 1409**,无法区分是被程序注册/系统保留/
+    键盘钩子占用——所以失败一律归类 OCCUPIED,细分靠 SYSTEM 表与来源推断。
     """
     if ok:
         return HotkeyStatus.FREE
     if err == _SYSTEM_FLAG:
         return HotkeyStatus.SYSTEM
-    if err == ERROR_HOTKEY_ALREADY_REGISTERED:  # 1419:被某程序的 RegisterHotKey 占用
+    if err == ERROR_HOTKEY_ALREADY_REGISTERED:  # 1409:已被占用(程序/系统/钩子统一)
         return HotkeyStatus.OCCUPIED
-    if err == ERROR_HOTKEY_NOT_REGISTERED:  # 1409:表外,多为后台键盘钩子占用
+    if err == ERROR_HOTKEY_NOT_REGISTERED:  # 1419:防御性,RegisterHotKey 实际不产生此码
         return HotkeyStatus.OCCUPIED
     return HotkeyStatus.ERROR
 
@@ -163,12 +166,13 @@ def _guess_source(combo: HotkeyCombo) -> str:
 
 
 def _build_source(status: HotkeyStatus, err: int, combo: HotkeyCombo) -> str:
-    """根据状态与错误码,推断占用来源(尽力而为)。
+    """根据状态推断占用来源(尽力而为)。
 
-    - SYSTEM         → "Windows 系统保留"
-    - OCCUPIED(1419) → 已知热键映射,否则"已被程序注册占用"
-    - OCCUPIED(1409) → 已知热键映射,否则"可能被后台键盘钩子占用"
-    - ERROR          → "探测失败(错误码 X)"
+    重要:RegisterHotKey 失败时**统一返回 1409**,无法据此区分"被程序注册 /
+    系统保留 / 被键盘钩子占用"——这三类都返回 1409。因此:
+    - SYSTEM(命中硬编码系统表)→ 明确"Windows 系统保留";
+    - OCCUPIED → 优先用已知热键库(_guess_source)推测;推测不出就给中性诚实文案,
+      不编造具体占用机制。
     """
     if status == HotkeyStatus.SYSTEM:
         return "Windows 系统保留"
@@ -176,9 +180,7 @@ def _build_source(status: HotkeyStatus, err: int, combo: HotkeyCombo) -> str:
         known = _guess_source(combo)
         if known:
             return known
-        if err == ERROR_HOTKEY_ALREADY_REGISTERED:
-            return "已被程序注册占用(RegisterHotKey)"
-        return "可能被后台键盘钩子占用(截图/输入法/翻译等)"
+        return "无法注册(已被程序/系统/钩子占用,Windows 不提供具体来源)"
     if status == HotkeyStatus.ERROR:
         return f"探测失败(错误码 {err})"
     return ""

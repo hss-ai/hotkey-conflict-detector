@@ -56,8 +56,8 @@ def _build_vk_map() -> dict[int, str]:
         **{0x30 + i: str(i) for i in range(10)},
         # 字母 A-Z
         **{0x41 + i: chr(ord("A") + i) for i in range(26)},
-        # 功能键 F1-F24
-        **{0x6F + i: f"F{i + 1}" for i in range(24)},
+        # 功能键 F1-F24(VK_F1 = 0x70 ... VK_F24 = 0x87)
+        **{0x70 + i: f"F{i + 1}" for i in range(24)},
         # 符号键(OEM)
         0xBA: ";",
         0xBB: "=",
@@ -70,6 +70,35 @@ def _build_vk_map() -> dict[int, str]:
         0xDC: "\\",
         0xDD: "]",
         0xDE: "'",
+        # 小键盘
+        **{0x60 + i: f"Num{i}" for i in range(10)},  # NumPad0-9
+        0x6A: "Num*",   # MULTIPLY
+        0x6B: "Num+",   # ADD
+        0x6D: "Num-",   # SUBTRACT
+        0x6E: "Num.",   # DECIMAL
+        0x6F: "Num/",   # DIVIDE
+        # 其他控制键
+        0x2C: "PrintScreen",
+        0x90: "NumLock",
+        0x91: "ScrollLock",
+        # 浏览器键
+        0xA6: "BrowserBack",
+        0xA7: "BrowserForward",
+        0xA8: "BrowserRefresh",
+        0xA9: "BrowserStop",
+        0xAA: "BrowserSearch",
+        0xAB: "BrowserFavorites",
+        0xAC: "BrowserHome",
+        # 多媒体键
+        0xAD: "VolumeMute",
+        0xAE: "VolumeDown",
+        0xAF: "VolumeUp",
+        0xB0: "MediaNext",
+        0xB1: "MediaPrev",
+        0xB2: "MediaStop",
+        0xB3: "MediaPlayPause",
+        0xB4: "LaunchMail",
+        0xB5: "LaunchMedia",
     }
     return base
 
@@ -168,6 +197,8 @@ def generate_combos(
     navigation: bool = True,
     symbols: bool = True,
     space: bool = True,
+    numpad: bool = False,
+    multimedia: bool = False,
 ) -> list[HotkeyCombo]:
     """根据筛选条件生成待检测的热键组合列表。"""
     vks: list[int] = []
@@ -188,6 +219,13 @@ def generate_combos(
         vks.extend([0xBA, 0xBB, 0xBC, 0xBD, 0xBE, 0xBF, 0xC0, 0xDB, 0xDC, 0xDD, 0xDE])
     if space and 0x20 not in vks:
         vks.append(0x20)
+    if numpad:
+        vks.extend([0x60, 0x61, 0x62, 0x63, 0x64, 0x65, 0x66, 0x67, 0x68, 0x69,
+                    0x6A, 0x6B, 0x6D, 0x6E, 0x6F])  # Num0-9, Num*+-./
+    if multimedia:
+        vks.extend([0xAD, 0xAE, 0xAF, 0xB0, 0xB1, 0xB2, 0xB3, 0xB4, 0xB5,  # 音量/媒体
+                    0xA6, 0xA7, 0xA8, 0xA9, 0xAA, 0xAB, 0xAC,  # 浏览器
+                    0x2C])  # PrintScreen
 
     # 去重保序
     seen: set[int] = set()

@@ -131,12 +131,20 @@ class MainWindow(QtWidgets.QMainWindow):
         self._cb_nav = QtWidgets.QCheckBox("导航/编辑键")
         self._cb_symbols = QtWidgets.QCheckBox("符号键")
         self._cb_space = QtWidgets.QCheckBox("Space")
+        self._cb_numpad = QtWidgets.QCheckBox("小键盘")
+        self._cb_multimedia = QtWidgets.QCheckBox("媒体/浏览器键")
+        for cb in (
+            self._cb_win, self._cb_letters, self._cb_digits, self._cb_fkeys,
+            self._cb_nav, self._cb_symbols, self._cb_space, self._cb_numpad,
+            self._cb_multimedia,
+        ):
+            h.addWidget(cb)
+        # 主流键默认勾选;扩展键(小键盘/多媒体)默认不勾,避免组合数过多
         for cb in (
             self._cb_win, self._cb_letters, self._cb_digits, self._cb_fkeys,
             self._cb_nav, self._cb_symbols, self._cb_space,
         ):
             cb.setChecked(True)
-            h.addWidget(cb)
 
         h.addSpacing(12)
         h.addWidget(QtWidgets.QLabel("最少修饰键:"))
@@ -280,7 +288,8 @@ class MainWindow(QtWidgets.QMainWindow):
         # 扫描范围变化时刷新提示
         for cb in (
             self._cb_win, self._cb_letters, self._cb_digits, self._cb_fkeys,
-            self._cb_nav, self._cb_symbols, self._cb_space,
+            self._cb_nav, self._cb_symbols, self._cb_space, self._cb_numpad,
+            self._cb_multimedia,
         ):
             cb.toggled.connect(self._update_scope_hint)
         self._spin_min_mods.valueChanged.connect(self._update_scope_hint)
@@ -305,6 +314,8 @@ class MainWindow(QtWidgets.QMainWindow):
             navigation=self._cb_nav.isChecked(),
             symbols=self._cb_symbols.isChecked(),
             space=self._cb_space.isChecked(),
+            numpad=self._cb_numpad.isChecked(),
+            multimedia=self._cb_multimedia.isChecked(),
             min_modifiers=self._spin_min_mods.value(),
         )
 
@@ -378,7 +389,8 @@ class MainWindow(QtWidgets.QMainWindow):
         self._btn_stop.setEnabled(scanning)
         for w in (
             self._cb_win, self._cb_letters, self._cb_digits, self._cb_fkeys,
-            self._cb_nav, self._cb_symbols, self._cb_space, self._spin_min_mods,
+            self._cb_nav, self._cb_symbols, self._cb_space, self._cb_numpad,
+            self._cb_multimedia, self._spin_min_mods,
         ):
             w.setEnabled(not scanning)
 

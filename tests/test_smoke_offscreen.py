@@ -91,6 +91,13 @@ def main() -> int:
         assert got == want, f"作用域行{row}: 期望 {want!r}, 实际 {got!r}"
     print("[OK] 作用域映射: OCCUPIED→全局占用 / SYSTEM→系统级 / FREE,ERROR→—")
 
+    # 回归测试:F1-F24 的 VK 码(曾错位一位:0x6F→F1 的 bug)
+    from core.hotkeys import vk_name  # noqa: E402
+    assert vk_name(0x70) == "F1", f"VK_F1 映射错误: {vk_name(0x70)}"
+    assert vk_name(0x87) == "F24", f"VK_F24 映射错误: {vk_name(0x87)}"
+    assert vk_name(0x6F) == "Num/", "0x6F 应为小键盘除号,而非 F1"
+    print("[OK] F1-F24 VK 码映射正确(0x70=F1 … 0x87=F24)")
+
     print("[OK] 冒烟测试全部通过")
     return 0
 

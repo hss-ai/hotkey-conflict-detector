@@ -43,7 +43,7 @@ KNOWN_APPS: tuple[KnownApp, ...] = (
     KnownApp("企业微信", ("wxwork.exe",)),
     KnownApp("Snipaste", ("snipaste.exe",)),
     KnownApp("ShareX", ("sharex.exe",)),
-    KnownApp("Snipaste / 截图", ("snippingtool.exe", "screenclippinghost.exe", "snipaste.exe")),
+    KnownApp("Windows 截图工具", ("snippingtool.exe", "screenclippinghost.exe")),
     KnownApp("Everything", ("everything.exe",)),
     KnownApp("Listary", ("listary.exe",)),
     KnownApp("Flow Launcher", ("flow.launcher.exe",)),
