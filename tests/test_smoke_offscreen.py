@@ -87,6 +87,22 @@ def _verify_vk_regression() -> None:
     print("[OK] F1-F24 VK 码映射正确(0x70=F1 … 0x87=F24)")
 
 
+def _verify_error_codes() -> None:
+    """回归测试:占用错误码必须是 1409(曾把 docstring 写成 1419)。"""
+    from core.detector import (  # noqa: E402
+        ERROR_HOTKEY_ALREADY_REGISTERED,
+        ERROR_HOTKEY_NOT_REGISTERED,
+    )
+
+    assert ERROR_HOTKEY_ALREADY_REGISTERED == 1409, (
+        f"占用错误码应为 1409,实际 {ERROR_HOTKEY_ALREADY_REGISTERED}"
+    )
+    assert ERROR_HOTKEY_NOT_REGISTERED == 1419, (
+        f"注销错误码应为 1419,实际 {ERROR_HOTKEY_NOT_REGISTERED}"
+    )
+    print("[OK] 错误码一致: RegisterHotKey 占用=1409, UnregisterHotKey 注销=1419")
+
+
 def main() -> int:
     # import 放进函数内:即使 import 阶段失败,外层 try 也能捕获并输出诊断
     from PySide6 import QtCore, QtWidgets  # noqa: E402
@@ -134,6 +150,7 @@ def main() -> int:
     _verify_counts_and_filter(win)
     _verify_scope_mapping()
     _verify_vk_regression()
+    _verify_error_codes()
 
     print("[OK] 冒烟测试全部通过")
     return 0
