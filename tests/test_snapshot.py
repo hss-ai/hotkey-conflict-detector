@@ -136,6 +136,31 @@ def test_suspects_in_snapshot() -> None:
         snap.list_process_names = orig
 
 
+def test_running_apps_in_snapshot_and_diff() -> None:
+    """快照记录当时运行的已知热键软件;diff 给出 apps_added/apps_removed;旧 schema 容错。"""
+    orig = snap.list_process_names
+    try:
+        snap.list_process_names = lambda: {"qq.exe", "wechat.exe", "explorer.exe"}
+        results = [_mk(6, 0x41, HotkeyStatus.OCCUPIED, "QQ"), _mk(2, 0x42, HotkeyStatus.FREE)]
+        d = snap.to_dict(results)
+        assert d["running_apps"], "快照应含 running_apps"
+        assert "QQ" in d["running_apps"] and "微信 WeChat" in d["running_apps"]
+
+        snap.list_process_names = lambda: {"wechat.exe", "explorer.exe", "utools.exe"}
+        d2 = snap.to_dict([_mk(2, 0x42, HotkeyStatus.FREE)])
+        diff = snap.diff(d, d2)
+        assert "uTools" in diff["apps_added"], f"apps_added 应含 uTools,实际 {diff['apps_added']}"
+        assert "QQ" in diff["apps_removed"], f"apps_removed 应含 QQ,实际 {diff['apps_removed']}"
+
+        # 旧 schema(无 running_apps 字段)容错:当作空集
+        legacy = {"results": []}
+        diff2 = snap.diff(legacy, d2)
+        assert "uTools" in diff2["apps_added"] and diff2["apps_removed"] == []
+        print(f"[OK] running_apps 快照/diff/旧容错:+{diff['apps_added']} / -{diff['apps_removed']}")
+    finally:
+        snap.list_process_names = orig
+
+
 def main() -> int:
     test_to_dict_fields()
     test_save_load_roundtrip()
@@ -143,6 +168,8 @@ def main() -> int:
     test_diff_three_categories()
     test_diff_changed_category()
     test_snapshot_label()
+    test_suspects_in_snapshot()
+    test_running_apps_in_snapshot_and_diff()
     print("[OK] test_snapshot 全部通过")
     return 0
 

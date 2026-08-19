@@ -8,9 +8,14 @@
 打分(0-5★,启发式,仅供排障参考,不保证准确):
 - 命中已知默认热键且进程在运行 .......... +5(封顶)
 - 命中已知默认热键但进程未检测到 ........ +3
-- 已知热键库中同 VK(修饰键不同)+ 进程在运行 +2(用户可能改过修饰键)
+- 已知热键库中同 VK(修饰键可能被用户改过)+ 进程在运行 +2(用户可能改过修饰键)
 - 软件类别基础分(启动器/剪贴板/AHK 等爱注册全局热键)+1~3
 - 进程名含 hotkey/hook/key 等特征(不在已知库)+2
+
+星级语义(重要,防止"启发式叠满"伪装成精确命中):
+- 5★ 专属「精确命中默认热键」的证据组合;
+- 无精确命中的纯启发式累加封顶 **4★**——同 VK 猜测 + 类别分等弱证据
+  无论怎么叠都不会到 5,与"命中默认热键"严格区分。
 """
 from __future__ import annotations
 
@@ -29,6 +34,7 @@ class Suspect:
     matched: str                 # 匹配到的进程名
     stars: int                   # 0-5
     reasons: list[str] = field(default_factory=list)
+    exact_hit: bool = False      # 是否含「精确命中默认热键」证据(5★ 的唯一通道)
 
     @property
     def star_str(self) -> str:
@@ -84,10 +90,13 @@ def rank_suspects(combo: HotkeyCombo, running: set[str] | None = None) -> list[S
         owners = {proc_owner.get(p) for p in procs if p} - {None}
         return owners.pop() if len(owners) == 1 and app not in owners else app
 
-    def add(app: str, proc: str, stars: int, reason: str) -> None:
+    def add(app: str, proc: str, stars: int, reason: str, exact: bool = False) -> None:
         s = by_app.setdefault(app, Suspect(app=app, matched=proc, stars=0))
+        s.exact_hit = s.exact_hit or exact
         if stars > 0:
-            s.stars = min(5, s.stars + stars)
+            # 5★ 仅对精确命中开放;纯启发式累加封顶 4★(见模块 docstring)
+            cap = 5 if s.exact_hit else 4
+            s.stars = min(cap, s.stars + stars)
         s.reasons.append(reason)
 
     # ① 已知热键库精确命中(同 build_evidence 的信号,但展开全部候选)
@@ -96,7 +105,8 @@ def rank_suspects(combo: HotkeyCombo, running: set[str] | None = None) -> list[S
         add(_group(kh.app, kh.processes),
             next((p for p in kh.processes if p in running), kh.processes[0] if kh.processes else "?"),
             5 if kh_running else 3,
-            f"命中 {kh.app} 默认热键{kh.action}(进程{'在运行' if kh_running else '未检测到'})")
+            f"命中 {kh.app} 默认热键{kh.action}(进程{'在运行' if kh_running else '未检测到'})",
+            exact=True)
 
     # ② 同 VK 不同修饰键:用户可能改过修饰键
     for (mods, vk), khs in merged_known_hotkeys().items():

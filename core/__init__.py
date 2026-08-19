@@ -23,10 +23,10 @@ from .detector import (
     HotkeyStatus,
     HotkeyResult,
     HotkeyDetector,
-    ScanThread,
     probe,
     is_hotkey_occupied,
     quick_probe,
+    probe_result,
 )
 from . import apps
 from .suspect import Suspect, rank_suspects, format_suspects
@@ -65,14 +65,14 @@ __all__ = [
     "format_combo",
     "modifier_name",
     "vk_name",
-    # detector
+    # detector(ScanThread 在 ui/scan_thread —— core 不依赖 Qt 的分层底线)
     "HotkeyStatus",
     "HotkeyResult",
     "HotkeyDetector",
-    "ScanThread",
     "probe",
     "is_hotkey_occupied",
     "quick_probe",
+    "probe_result",
     # apps
     "apps",
     # suspect

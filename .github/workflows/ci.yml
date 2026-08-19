@@ -1,11 +1,13 @@
 name: CI
 
-# 主干推送 / PR 时跑离屏冒烟测试。
+# 主干推送 / PR:① 模块单测(纯逻辑,阻塞) ② 离屏冒烟(需 Qt,容错)。
 #
 # ⚠️ 已知限制:GitHub-hosted 的 Windows runner 运行在 Session 0(无交互桌面),
 #    import PySide6 / 创建 QApplication 会原生崩溃(进程在 Python 异常处理前
-#    被杀,本地完全无法复现)。因此 smoke job 设 continue-on-error:失败不阻塞
-#    CI 状态。请用本地验证:
+#    被杀,本地无法复现)。因此:
+#    - unit job 只跑纯逻辑单测(core 已零 Qt,ScanThread 在 ui/),Session 0 安全,
+#      失败阻塞;
+#    - smoke job 设 continue-on-error:失败不阻塞。请用本地验证:
 #      QT_QPA_PLATFORM=offscreen python tests/test_smoke_offscreen.py
 on:
   push:
@@ -13,6 +15,27 @@ on:
   pull_request:
 
 jobs:
+  unit:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 配置 Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      # 纯逻辑单测零 Qt,无需安装 PySide6
+      - name: 模块单测(纯逻辑)
+        run: |
+          Get-ChildItem tests/test_*.py `
+            | Where-Object { $_.Name -ne 'test_smoke_offscreen.py' } `
+            | ForEach-Object {
+                Write-Host "=== $($_.Name)"
+                python $_.FullName
+                if ($LASTEXITCODE -ne 0) { throw "$($_.Name) failed (exit $LASTEXITCODE)" }
+              }
+
   smoke:
     runs-on: windows-latest
     continue-on-error: true   # Session 0 跑不了 Qt,失败不阻塞;本地可通过

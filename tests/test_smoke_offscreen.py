@@ -105,8 +105,9 @@ def _verify_error_codes() -> None:
 
 def _verify_resume() -> None:
     """续扫逻辑:filter_combos 剔除已扫 + ScanThread 接受 exclude(构造数据)。"""
-    from core import HotkeyCombo, ScanThread  # noqa: E402
+    from core import HotkeyCombo  # noqa: E402
     from core.detector import filter_combos  # noqa: E402
+    from ui.scan_thread import ScanThread  # noqa: E402
 
     combos = [HotkeyCombo(m, v) for m in (1, 2, 3) for v in (0x41, 0x42)]  # 6 个
     scanned = {(1, 0x41), (2, 0x42)}  # 假设已扫 2 个

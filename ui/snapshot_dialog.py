@@ -9,6 +9,8 @@ from PySide6 import QtCore, QtWidgets
 
 from core import snapshot as snap
 
+from .style import STATUS_FREE, TEXT_MUTED, status_color
+
 
 class SnapshotCompareDialog(QtWidgets.QDialog):
     """两份快照 diff 展示。"""
@@ -30,14 +32,14 @@ class SnapshotCompareDialog(QtWidgets.QDialog):
             "🆕 新增占用 = 旧空闲/无、新被占;✅ 已释放 = 旧被占、新空闲。"
         )
         intro.setWordWrap(True)
-        intro.setStyleSheet("color:#6b7480;")
+        intro.setStyleSheet(f"color:{TEXT_MUTED};")
         root.addWidget(intro)
 
         if len(self._paths) < 2:
             tip = QtWidgets.QLabel(
                 "ⓘ 至少需要 2 份历史快照才能对比。\n请先扫描并点「💾 存快照」。"
             )
-            tip.setStyleSheet("padding:24px;color:#6b7480;")
+            tip.setStyleSheet(f"padding:24px;color:{TEXT_MUTED};")
             tip.setAlignment(QtCore.Qt.AlignCenter)
             root.addWidget(tip, 1)
             btn = QtWidgets.QPushButton("关闭")
@@ -93,17 +95,40 @@ class SnapshotCompareDialog(QtWidgets.QDialog):
             return
         d = snap.diff(old, new)
 
-        self._add_section("🆕 新增占用", len(d["added"]), "#dc2626", "#fde8e8",
-                          [e.get("name", "?") for e in d["added"]])
-        self._add_section("✅ 已释放", len(d["removed"]), "#16a34a", "#e8f6ee",
-                          [e.get("name", "?") for e in d["removed"]])
-        self._add_section("🔄 状态变化", len(d["changed"]), "#64748b", "#eef1f4",
-                          [f"{oe.get('name', '?')} : {oe.get('status', '?')} → {ne.get('status', '?')}"
-                           for oe, ne in d["changed"]])
+        # 三个 section 的颜色沿用状态语义色:新增=占用红 / 已释放=空闲绿 / 变化=系统灰
+        for title, entries, status_key in (
+            ("🆕 新增占用", d["added"], "occupied"),
+            ("✅ 已释放", d["removed"], "free"),
+            ("🔄 状态变化", d["changed"], "system"),
+        ):
+            fg, bg = status_color(status_key)
+            if status_key == "system":
+                items = [
+                    f"{oe.get('name', '?')} : {oe.get('status', '?')} → {ne.get('status', '?')}"
+                    for oe, ne in entries
+                ]
+            else:
+                items = [e.get("name", "?") for e in entries]
+            self._add_section(title, len(entries), fg, bg, items)
+
+        # 热键软件环境变化:与「新增占用」并排,辅助定位"装了/开了某软件导致的新占用"
+        apps_added = d.get("apps_added") or []
+        apps_removed = d.get("apps_removed") or []
+        if apps_added or apps_removed:
+            lines = []
+            if apps_added:
+                lines.append("✚ 新启动运行:" + "、".join(apps_added))
+            if apps_removed:
+                lines.append("➖ 已退出:" + "、".join(apps_removed))
+            if apps_added and d["added"]:
+                lines.append(f"⚠ 期间新增 {len(d['added'])} 个占用,优先排查上面新启动的软件")
+            self._add_section("🖥 热键软件变化",
+                              len(apps_added) + len(apps_removed),
+                              STATUS_SYSTEM, status_color("system")[1], lines)
 
         if not (d["added"] or d["removed"] or d["changed"]):
             same = QtWidgets.QLabel("✓ 两份快照的冲突情况完全一致,无变化。")
-            same.setStyleSheet("padding:16px;color:#16a34a;font-weight:600;")
+            same.setStyleSheet(f"padding:16px;color:{STATUS_FREE};font-weight:600;")
             same.setAlignment(QtCore.Qt.AlignCenter)
             self._result_layout.addWidget(same)
 
@@ -116,7 +141,7 @@ class SnapshotCompareDialog(QtWidgets.QDialog):
         v.setContentsMargins(12, 8, 12, 8)
         if not items:
             lbl = QtWidgets.QLabel("无")
-            lbl.setStyleSheet("color:#9aa3ad;")
+            lbl.setStyleSheet(f"color:{TEXT_MUTED};")
             v.addWidget(lbl)
         else:
             for text in items:

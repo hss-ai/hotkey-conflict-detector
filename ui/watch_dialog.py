@@ -13,7 +13,7 @@ from core import HotkeyCombo, quick_probe, scan_running_hotkey_apps
 from core.hotkeys import MOD_ALT, MOD_CONTROL, MOD_SHIFT, MOD_WIN, format_combo
 from core.watch import WatchState
 
-from .style import status_color
+from .style import STATUS_OCCUPIED, TEXT_MUTED, status_color
 
 
 _STATUS_LABEL = {
@@ -83,7 +83,7 @@ class WatchDialog(QtWidgets.QDialog):
             "解决「时好时坏」——捕捉它从空闲变占用的瞬间及当时运行的软件。"
         )
         intro.setWordWrap(True)
-        intro.setStyleSheet("color:#6b7480;")
+        intro.setStyleSheet(f"color:{TEXT_MUTED};")
         root.addWidget(intro)
 
         # 控制栏
@@ -106,12 +106,13 @@ class WatchDialog(QtWidgets.QDialog):
         ctrl.addWidget(self._btn_toggle)
         root.addLayout(ctrl)
 
-        # 当前状态徽章
+        # 当前状态徽章(初始未开始,用 system 灰)
+        fg0, bg0 = status_color("system")
         self._badge = QtWidgets.QLabel("未开始")
         self._badge.setAlignment(QtCore.Qt.AlignCenter)
         self._badge.setStyleSheet(
-            "background:#eef1f4;color:#64748b;font-weight:600;"
-            "padding:8px;border-radius:6px;"
+            f"background:{bg0};color:{fg0};font-weight:600;"
+            f"padding:8px;border-radius:6px;"
         )
         root.addWidget(self._badge)
 
@@ -129,7 +130,7 @@ class WatchDialog(QtWidgets.QDialog):
         # 摘要
         self._summary = QtWidgets.QLabel("尚未开始。")
         self._summary.setWordWrap(True)
-        self._summary.setStyleSheet("color:#6b7480;")
+        self._summary.setStyleSheet(f"color:{TEXT_MUTED};")
         root.addWidget(self._summary)
 
         btns = QtWidgets.QHBoxLayout()
@@ -186,7 +187,7 @@ class WatchDialog(QtWidgets.QDialog):
                     f"⚡ 状态转变!{_STATUS_LABEL.get(prev_status, prev_status)} → "
                     f"{_STATUS_LABEL.get(r.status.value, r.status.value)}"
                 )
-                self._summary.setStyleSheet("color:#dc2626;font-weight:600;")
+                self._summary.setStyleSheet(f"color:{STATUS_OCCUPIED};font-weight:600;")
                 return
         self._refresh_summary()
 
@@ -211,7 +212,7 @@ class WatchDialog(QtWidgets.QDialog):
 
     def _refresh_summary(self) -> None:
         self._summary.setText(self._state.summary)
-        self._summary.setStyleSheet("color:#6b7480;")
+        self._summary.setStyleSheet(f"color:{TEXT_MUTED};")
 
     def _copy(self) -> None:
         if not self._state.events:
@@ -224,7 +225,7 @@ class WatchDialog(QtWidgets.QDialog):
         self._state.clear()
         self._table.setRowCount(0)
         self._summary.setText("已清空。")
-        self._summary.setStyleSheet("color:#6b7480;")
+        self._summary.setStyleSheet(f"color:{TEXT_MUTED};")
 
     def reject(self) -> None:  # noqa: D401
         self._timer.stop()

@@ -14,7 +14,18 @@ from core.suspect import rank_suspects
 from .ai_settings_dialog import AiSettingsDialog
 from .locate_dialog import LocateSourceDialog
 from .models import SCOPE_LABEL
-from .style import status_color
+from .style import (
+    ADVICE_BG,
+    ADVICE_BORDER,
+    ADVICE_TEXT,
+    BORDER,
+    SYM_COLORS,
+    SYM_WARN,
+    TEXT_FAINT,
+    TEXT_MUTED,
+    status_color,
+)
+from .workers import FnWorker
 
 
 class DetailDialog(QtWidgets.QDialog):
@@ -69,13 +80,13 @@ class DetailDialog(QtWidgets.QDialog):
             star = "★" * r.evidence.stars + "☆" * (5 - r.evidence.stars)
             evl.addWidget(QtWidgets.QLabel(
                 f"<b>{r.evidence.app}</b>{r.evidence.action}　"
-                f"置信度:<b>{r.evidence.confidence}</b> <span style='color:#d97706'>{star}</span>"
+                f"置信度:<b>{r.evidence.confidence}</b> <span style='color:{SYM_WARN}'>{star}</span>"
             ))
             evl.addWidget(self._hline())
             for desc, sym in r.evidence.checks:
                 evl.addWidget(self._check_row(sym, desc))
             evl.addWidget(QtWidgets.QLabel(
-                "<span style='color:#888;font-size:11px'>"
+                f"<span style='color:{TEXT_FAINT};font-size:11px'>"
                 "注:Windows 不提供「哪个进程占用哪个热键」的 API,以上为基于已知热键库的推断。</span>"
             ))
         else:
@@ -92,8 +103,8 @@ class DetailDialog(QtWidgets.QDialog):
             adv = QtWidgets.QLabel(advice)
             adv.setWordWrap(True)
             adv.setStyleSheet(
-                "background:#f0f5ff;border:1px solid #c7d8ff;border-radius:6px;"
-                "padding:10px;color:#1e3a8a;"
+                f"background:{ADVICE_BG};border:1px solid {ADVICE_BORDER};border-radius:6px;"
+                f"padding:10px;color:{ADVICE_TEXT};"
             )
             root.addWidget(adv)
 
@@ -111,16 +122,17 @@ class DetailDialog(QtWidgets.QDialog):
             btn_ai.setToolTip("把热键 + 嫌疑排序 + 进程列表发给自配的 LLM,给出嫌疑度排序与排查建议")
             btn_ai.clicked.connect(self._ai_analyze)
             btns.addWidget(btn_ai)
+            self._btn_ai = btn_ai
             btn_ai_cfg = QtWidgets.QPushButton("⚙ AI 设置")
             btn_ai_cfg.clicked.connect(self._ai_settings)
             btns.addWidget(btn_ai_cfg)
         btns.addStretch(1)
-        btn_copy = QtWidgets.QPushButton("📋 复制诊断信息")
-        btn_copy.clicked.connect(self._copy)
+        self._btn_copy = QtWidgets.QPushButton("📋 复制诊断信息")
+        self._btn_copy.clicked.connect(self._copy)
         btn_close = QtWidgets.QPushButton("关闭")
         btn_close.setObjectName("primary")
         btn_close.clicked.connect(self.accept)
-        btns.addWidget(btn_copy)
+        btns.addWidget(self._btn_copy)
         btns.addWidget(btn_close)
         root.addLayout(btns)
 
@@ -137,8 +149,8 @@ class DetailDialog(QtWidgets.QDialog):
         for s in self._suspects:
             v.addWidget(self._check_row(
                 "△" if s.stars < 4 else "✓",
-                f"<b>{s.star_str}</b> {s.app} <span style='color:#888;font-size:11px'>({s.matched})</span>"
-                f"<br><span style='color:#6b7480;font-size:11px'>{' ; '.join(s.reasons)}</span>",
+                f"<b>{s.star_str}</b> {s.app} <span style='color:{TEXT_FAINT};font-size:11px'>({s.matched})</span>"
+                f"<br><span style='color:{TEXT_MUTED};font-size:11px'>{' ; '.join(s.reasons)}</span>",
             ))
         return box
 
@@ -147,7 +159,11 @@ class DetailDialog(QtWidgets.QDialog):
         AiSettingsDialog(self).exec()
 
     def _ai_analyze(self) -> None:
-        """后台线程调用 LLM 分析,结果弹窗展示(不冻结 UI)。"""
+        """后台线程调用 LLM 分析,结果弹窗展示(不冻结 UI)。
+
+        worker 生命周期由 FnWorker.spawn 管理:本对话框关闭后线程安全跑完,
+        信号自动断开,结果被丢弃(见 ui/workers.py)。
+        """
         if not load_ai_config().configured:
             QtWidgets.QMessageBox.information(
                 self, "AI 分析",
@@ -157,14 +173,11 @@ class DetailDialog(QtWidgets.QDialog):
                 return
         combo = self._result.combo
         self._ai_btn_set_enabled(False)
-        self._ai_out = _AiWorker(combo)
-        self._ai_out.finished_ok.connect(self._ai_done)
-        self._ai_out.failed.connect(self._ai_fail)
-        self._ai_out.start()
+        FnWorker.spawn(lambda: analyze_combo(combo), self._ai_done, self._ai_fail)
 
     def _ai_btn_set_enabled(self, enabled: bool) -> None:
-        btn = self.findChild(QtWidgets.QPushButton, "ai_analyze_btn")
-        if btn:
+        btn = getattr(self, "_btn_ai", None)
+        if btn is not None:
             btn.setEnabled(enabled)
             btn.setText("🤖 AI 分析来源" if enabled else "🤖 AI 分析中…")
 
@@ -190,20 +203,20 @@ class DetailDialog(QtWidgets.QDialog):
     # ------------------------------------------------------------------
     def _dim(self, text: str) -> QtWidgets.QLabel:
         lbl = QtWidgets.QLabel(text)
-        lbl.setStyleSheet("color:#6b7480;")
+        lbl.setStyleSheet(f"color:{TEXT_MUTED};")
         return lbl
 
     def _hline(self) -> QtWidgets.QFrame:
         line = QtWidgets.QFrame()
         line.setFrameShape(QtWidgets.QFrame.HLine)
-        line.setStyleSheet("color:#e3e7ec;")
+        line.setStyleSheet(f"color:{BORDER};")
         return line
 
     def _check_row(self, sym: str, desc: str) -> QtWidgets.QWidget:
         w = QtWidgets.QWidget()
         h = QtWidgets.QHBoxLayout(w)
         h.setContentsMargins(0, 0, 0, 0)
-        color = {"✓": "#16a34a", "△": "#d97706", "✗": "#dc2626", "?": "#64748b"}.get(sym, "#64748b")
+        color = SYM_COLORS.get(sym, SYM_COLORS["?"])
         s = QtWidgets.QLabel(sym)
         s.setStyleSheet(f"color:{color};font-weight:700;font-size:15px;")
         s.setFixedWidth(20)
@@ -249,29 +262,8 @@ class DetailDialog(QtWidgets.QDialog):
         elif r.source:
             lines.append(f"来源: {r.source}")
         QtWidgets.QApplication.clipboard().setText("\n".join(lines))
-        self.findChild(QtWidgets.QPushButton).setText("✓ 已复制")  # 简单反馈
-
-
-class _AiWorker(QtCore.QThread):
-    """后台调用 LLM,避免网络请求冻结 UI。"""
-
-    finished_ok = QtCore.Signal(str)
-    failed = QtCore.Signal(str)
-
-    def __init__(self, combo, parent: QtCore.QObject | None = None) -> None:
-        super().__init__(parent)
-        self._combo = combo
-
-    def run(self) -> None:  # pragma: no cover - 网络路径,单测走 mock
-        try:
-            text = analyze_combo(self._combo)
-        except AiError as e:
-            self.failed.emit(str(e))
-            return
-        except Exception as e:  # 线程里不吞未知异常
-            self.failed.emit(f"AI 调用异常:{e}")
-            return
-        self.finished_ok.emit(text)
+        # 反馈落在复制按钮自身(不能 findChild 找"第一个"——OCCUPIED 时第一个是「定位」按钮)
+        self._btn_copy.setText("✓ 已复制")  # 简单反馈
 
 
 __all__ = ["DetailDialog"]

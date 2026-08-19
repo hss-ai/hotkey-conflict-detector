@@ -14,7 +14,14 @@ from core import (
     scan_running_hotkey_apps,
 )
 
-from .style import status_color
+from .style import (
+    ADVICE_BG,
+    ADVICE_TEXT,
+    STATUS_FREE,
+    STATUS_OCCUPIED,
+    TEXT_FAINT,
+    status_color,
+)
 
 
 class LocateSourceDialog(QtWidgets.QDialog):
@@ -72,12 +79,14 @@ class LocateSourceDialog(QtWidgets.QDialog):
         # 结果
         self._result = QtWidgets.QLabel("关闭一个软件后点上方按钮。状态变绿即定位成功。")
         self._result.setWordWrap(True)
-        self._result.setStyleSheet("padding:10px;border-radius:6px;background:#f0f5ff;color:#1e3a8a;")
+        self._result.setStyleSheet(
+            f"padding:10px;border-radius:6px;background:{ADVICE_BG};color:{ADVICE_TEXT};"
+        )
         root.addWidget(self._result)
 
         root.addStretch(1)
         hint = QtWidgets.QLabel(
-            "<span style='color:#888'>提示:可疑优先级——截图工具、输入法、翻译/词典、"
+            f"<span style='color:{TEXT_FAINT}'>提示:可疑优先级——截图工具、输入法、翻译/词典、"
             "启动器(PowerToys Run/uTools)、录屏、云盘、安全软件。</span>"
         )
         hint.setWordWrap(True)
@@ -112,13 +121,15 @@ class LocateSourceDialog(QtWidgets.QDialog):
                 f"✓ 状态已变为空闲!\n\n占用者很可能是「{suspect}」(或你刚关闭的软件)。"
             )
             self._result.setStyleSheet(
-                "padding:10px;border-radius:6px;background:#e8f6ee;color:#166534;font-weight:600;"
+                f"padding:10px;border-radius:6px;background:{status_color('free')[1]};"
+                f"color:{STATUS_FREE};font-weight:600;"
             )
             QtWidgets.QApplication.beep()
         elif r.status.is_conflict:
             self._result.setText("仍未释放。继续关闭其他可疑软件后再点「重新检测」。")
             self._result.setStyleSheet(
-                "padding:10px;border-radius:6px;background:#fde8e8;color:#991b1b;"
+                f"padding:10px;border-radius:6px;background:{status_color('occupied')[1]};"
+                f"color:{STATUS_OCCUPIED};"
             )
         else:
             self._result.setText(f"当前状态:{r.status.label}")

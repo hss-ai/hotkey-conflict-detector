@@ -18,11 +18,9 @@ from __future__ import annotations
 
 import ctypes
 from ctypes import wintypes
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import Enum
-from typing import Callable, Optional
-
-from PySide6 import QtCore
+from typing import Optional
 
 from .hotkeys import HotkeyCombo, SYSTEM_RESERVED
 from .apps import build_evidence as _build_evidence, refresh_running_processes
@@ -151,6 +149,11 @@ def is_hotkey_occupied(modifiers: int, vk: int) -> bool:
 def quick_probe(modifiers: int, vk: int) -> HotkeyResult:
     """单次探测一个组合,返回完整 HotkeyResult(含证据链)。供「单点检测」用。"""
     refresh_running_processes()
+    return probe_result(modifiers, vk)
+
+
+def probe_result(modifiers: int, vk: int) -> HotkeyResult:
+    """探测单组合并解析来源(不刷新进程缓存——扫描循环先 refresh 一次再批量调)。"""
     ok, err = _probe_raw(modifiers, vk)
     status = _classify(ok, err)
     source, evidence = _resolve_source(status, err, HotkeyCombo(modifiers, vk))
@@ -175,7 +178,8 @@ def _resolve_source(status: HotkeyStatus, err: int, combo: HotkeyCombo) -> tuple
 
 
 # ---------------------------------------------------------------------------
-# 后台扫描线程(QThread)
+# 后台扫描支持(filter_combos 纯逻辑;QThread 封装在 ui/scan_thread.py,
+# core 不依赖 Qt —— 分层底线)
 # ---------------------------------------------------------------------------
 def filter_combos(
     combos: list[HotkeyCombo], exclude: set[tuple[int, int]] | None
@@ -185,69 +189,15 @@ def filter_combos(
     return [c for c in combos if (c.modifiers, c.vk) not in excl]
 
 
-class ScanThread(QtCore.QThread):
-    """在后台逐个探测组合,通过信号实时回报进度与结果。"""
-
-    # 每探测完一个组合发出:(result)
-    result_ready = QtCore.Signal(object)
-    # 进度:(已完成数, 总数)
-    progress = QtCore.Signal(int, int)
-    # 全部结束:(统计字典)
-    finished_scan = QtCore.Signal(dict)
-
-    def __init__(
-        self,
-        combos: list[HotkeyCombo],
-        exclude: set[tuple[int, int]] | None = None,
-        parent: Optional[QtCore.QObject] = None,
-    ) -> None:
-        super().__init__(parent)
-        self._combos = list(combos)
-        # 续扫:已扫过的 (modifiers,vk) 集合,run 时跳过
-        self._exclude: set[tuple[int, int]] = set(exclude) if exclude else set()
-        self._stop_flag = False
-
-    def request_stop(self) -> None:
-        """请求停止(在下一个组合前生效)。"""
-        self._stop_flag = True
-
-    def run(self) -> None:  # noqa: D401 - QThread 入口
-        # 续扫:剔除已扫过的 combo,只扫剩余
-        to_scan = filter_combos(self._combos, self._exclude)
-        total = len(to_scan)
-        stats = {"free": 0, "occupied": 0, "system": 0, "error": 0, "skipped": 0}
-        refresh_running_processes()  # 刷新进程缓存,供证据链判断"app 是否运行"
-
-        for i, combo in enumerate(to_scan):
-            if self._stop_flag:
-                break  # 用户已请求停止,剩余项不再探测
-
-            ok, err = _probe_raw(combo.modifiers, combo.vk)
-            status = _classify(ok, err)
-            source, evidence = _resolve_source(status, err, combo)
-            result = HotkeyResult(combo=combo, status=status, source=source, evidence=evidence)
-            self.result_ready.emit(result)
-
-            key = status.value
-            stats[key] = stats.get(key, 0) + 1
-            self.progress.emit(i + 1, total)
-
-        scanned = sum(v for k, v in stats.items() if k != "skipped")
-        stats["scanned"] = scanned
-        stats["total"] = total
-        stats["completed"] = scanned == total  # 是否完整扫完(未中途停止)
-        self.finished_scan.emit(stats)
-
-
 __all__ = [
     "HotkeyStatus",
     "HotkeyResult",
     "HotkeyDetector",
-    "ScanThread",
     "filter_combos",
     "probe",
     "is_hotkey_occupied",
     "quick_probe",
+    "probe_result",
 ]
 
 

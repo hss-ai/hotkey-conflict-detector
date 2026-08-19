@@ -17,14 +17,14 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from ._known_data import user_data_dir
+from ._known_data import merged_known_apps, user_data_dir
 from ._version import __version__
 from .apps import list_process_names
 from .hotkeys import HotkeyCombo, format_combo
 from .suspect import deserialize_suspects, rank_suspects, serialize_suspects
 
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 
 # 视为"冲突"的状态值(占用 / 系统保留)——diff 据此判定新增/释放
 CONFLICT_STATUSES = {"occupied", "system"}
@@ -77,12 +77,20 @@ def to_dict(results: list[Any], meta: dict | None = None) -> dict:
             if suspects:
                 entry["suspects"] = serialize_suspects(suspects)
         entries.append(entry)
+    # 当时在运行的已知热键软件(diff 时与"新增占用"关联,定位环境变化)
+    if running is None:
+        running = list_process_names()
+    running_apps = sorted({
+        app.name for app in merged_known_apps()
+        if any(p in running for p in app.processes)
+    })
     return {
         "schema_version": SCHEMA_VERSION,
         "created_at": datetime.now().isoformat(timespec="seconds"),
         "app_version": __version__,
         "meta": meta or {},
         "stats": stats,
+        "running_apps": running_apps,
         "results": entries,
     }
 
@@ -139,11 +147,13 @@ def _entry_map(d: dict) -> dict[tuple[int, int], dict]:
 
 
 def diff(old: dict, new: dict) -> dict[str, list]:
-    """对比两份快照,返回 {added, removed, changed}。
+    """对比两份快照,返回 {added, removed, changed, apps_added, apps_removed}。
 
     - added:   new 中是冲突(occupied/system)、而 old 中不存在或非冲突 → 新增占用
     - removed: old 中是冲突、而 new 中不存在或非冲突 → 已释放
     - changed: 两边都存在且 status 不同(同属冲突或同属非冲突的细节变化)
+    - apps_added / apps_removed:两份快照之间「新启动 / 已退出」的已知热键软件,
+      供 UI 与「新增占用」并排展示,帮助定位"装了某软件后新增占用"。
     """
     old_map = _entry_map(old)
     new_map = _entry_map(new)
@@ -171,7 +181,15 @@ def diff(old: dict, new: dict) -> dict[str, list]:
         if key not in new_map and oe.get("status") in CONFLICT_STATUSES:
             removed.append(oe)
 
-    return {"added": added, "removed": removed, "changed": changed}
+    # 热键软件环境变化(旧 schema 快照无 running_apps 字段 → 空集,容错)
+    old_apps = set(old.get("running_apps") or [])
+    new_apps = set(new.get("running_apps") or [])
+
+    return {
+        "added": added, "removed": removed, "changed": changed,
+        "apps_added": sorted(new_apps - old_apps),
+        "apps_removed": sorted(old_apps - new_apps),
+    }
 
 
 def list_snapshots() -> list[Path]:

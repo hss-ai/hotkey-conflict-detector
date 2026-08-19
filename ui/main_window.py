@@ -13,7 +13,6 @@ from PySide6 import QtCore, QtGui, QtWidgets
 from core import (
     HotkeyResult,
     HotkeyStatus,
-    ScanThread,
     generate_combos,
     quick_probe,
     scan_running_hotkey_apps,
@@ -36,16 +35,28 @@ from .recommend_dialog import RecommendDialog
 from .snapshot_dialog import SnapshotCompareDialog
 from .watch_dialog import WatchDialog
 from .models import COL_STATUS, SCOPE_LABEL, HotkeyFilterProxy, HotkeyTableModel
-from .style import QSS, STATUS_COLORS, status_color
+from .scan_thread import ScanThread
+from .style import (
+    ACCENT,
+    BG_PANEL,
+    BORDER,
+    STATUS_ERROR,
+    STATUS_FREE,
+    STATUS_OCCUPIED,
+    STATUS_SYSTEM,
+    TEXT_FAINT,
+    TEXT_MUTED,
+    status_color,
+)
 
-# 统计项定义:(key, 标题, 颜色)
+# 统计项定义:(key, 标题, 颜色)——颜色取自 style.py 语义色
 _STAT_ITEMS = (
-    ("total", "组合总数", "#2563eb"),
-    ("conflict", "冲突", "#dc2626"),
-    ("occupied", "已占用", "#dc2626"),
-    ("system", "系统保留", "#64748b"),
-    ("free", "空闲", "#16a34a"),
-    ("error", "异常", "#d97706"),
+    ("total", "组合总数", ACCENT),
+    ("conflict", "冲突", STATUS_OCCUPIED),
+    ("occupied", "已占用", STATUS_OCCUPIED),
+    ("system", "系统保留", STATUS_SYSTEM),
+    ("free", "空闲", STATUS_FREE),
+    ("error", "异常", STATUS_ERROR),
 )
 
 _STATUS_LABELS = (
@@ -199,7 +210,9 @@ class MainWindow(QtWidgets.QMainWindow):
     def _build_quick_bar(self) -> QtWidgets.QFrame:
         """单点检测条:按下热键自动探测这一个组合,无需全量扫描。"""
         frame = QtWidgets.QFrame()
-        frame.setStyleSheet("QFrame{background:#ffffff;border:1px solid #e3e7ec;border-radius:8px;}")
+        frame.setStyleSheet(
+            f"QFrame{{background:{BG_PANEL};border:1px solid {BORDER};border-radius:8px;}}"
+        )
         h = QtWidgets.QHBoxLayout(frame)
         h.setContentsMargins(12, 8, 12, 8)
         h.setSpacing(8)
@@ -215,7 +228,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self._quick_result = QtWidgets.QLabel("按下热键后自动检测…")
         self._quick_result.setMinimumWidth(220)
         self._quick_result.setWordWrap(True)
-        self._quick_result.setStyleSheet("color:#6b7480;")
+        self._quick_result.setStyleSheet(f"color:{TEXT_MUTED};")
         h.addWidget(self._quick_result, 1)
         return frame
 
@@ -256,14 +269,14 @@ class MainWindow(QtWidgets.QMainWindow):
 
         h.addStretch(1)
         self._lbl_scope_hint = QtWidgets.QLabel()
-        self._lbl_scope_hint.setStyleSheet("color:#6b7480;")
+        self._lbl_scope_hint.setStyleSheet(f"color:{TEXT_MUTED};")
         h.addWidget(self._lbl_scope_hint)
         return box
 
     def _build_stats_bar(self) -> QtWidgets.QFrame:
         frame = QtWidgets.QFrame()
         frame.setStyleSheet(
-            f"QFrame{{background:{QtWidgets.QWidget().palette().color(QtGui.QPalette.Window).name()};}}"
+            f"QFrame{{background:{self.palette().color(QtGui.QPalette.Window).name()};}}"
         )
         h = QtWidgets.QHBoxLayout(frame)
         h.setContentsMargins(0, 0, 0, 0)
@@ -279,7 +292,7 @@ class MainWindow(QtWidgets.QMainWindow):
     def _make_stat_card(self, title: str, color: str) -> QtWidgets.QFrame:
         card = QtWidgets.QFrame()
         card.setStyleSheet(
-            f"QFrame{{background:#ffffff;border:1px solid #e3e7ec;border-radius:10px;}}"
+            f"QFrame{{background:{BG_PANEL};border:1px solid {BORDER};border-radius:10px;}}"
         )
         card.setFixedHeight(64)
         card.setMinimumWidth(96)
@@ -291,7 +304,7 @@ class MainWindow(QtWidgets.QMainWindow):
         val.setStyleSheet(f"font-size:22px;font-weight:700;color:{color};")
         val.setAlignment(QtCore.Qt.AlignCenter)
         lab = QtWidgets.QLabel(title)
-        lab.setStyleSheet("font-size:11px;color:#6b7480;")
+        lab.setStyleSheet(f"font-size:11px;color:{TEXT_MUTED};")
         lab.setAlignment(QtCore.Qt.AlignCenter)
         v.addWidget(val)
         v.addWidget(lab)
@@ -331,7 +344,7 @@ class MainWindow(QtWidgets.QMainWindow):
         h.addWidget(self._search, 1)
 
         self._lbl_filter_info = QtWidgets.QLabel()
-        self._lbl_filter_info.setStyleSheet("color:#6b7480;")
+        self._lbl_filter_info.setStyleSheet(f"color:{TEXT_MUTED};")
         h.addWidget(self._lbl_filter_info)
         return frame
 
@@ -609,10 +622,10 @@ class MainWindow(QtWidgets.QMainWindow):
             return
         if known:
             self._sb_fg.setText(f"🎯 当前焦点:{name}(已知热键软件)")
-            self._sb_fg.setStyleSheet("color:#dc2626;font-weight:600;")
+            self._sb_fg.setStyleSheet(f"color:{STATUS_OCCUPIED};font-weight:600;")
         else:
             self._sb_fg.setText(f"当前焦点:{name}")
-            self._sb_fg.setStyleSheet("color:#6b7480;")
+            self._sb_fg.setStyleSheet(f"color:{TEXT_MUTED};")
 
     # ------------------------------------------------------------------
     # 单点检测 / 详情面板
@@ -622,7 +635,9 @@ class MainWindow(QtWidgets.QMainWindow):
         try:
             result = quick_probe(modifiers, vk)
         except Exception as e:  # noqa: BLE001
-            self._quick_result.setText(f"<span style='color:#dc2626'>检测失败:{e}</span>")
+            self._quick_result.setText(
+                f"<span style='color:{STATUS_OCCUPIED}'>检测失败:{e}</span>"
+            )
             self._btn_quick_detail.setEnabled(False)
             return
         self._last_quick = result
@@ -764,13 +779,17 @@ class MainWindow(QtWidgets.QMainWindow):
             "<br>应用内快捷键(如 Word 的 Ctrl+B)只在那个软件激活时生效,不占用全局槽位、不会冲突,"
             "因此不在检测范围。</p>"
             "<p><b>提示</b>:探测时会短暂占用目标组合(毫秒级),扫描很快,影响极小。</p>"
-            "<p style='color:#888'>基于 Python + PySide6 · MIT License</p>",
+            f"<p style='color:{TEXT_FAINT}'>基于 Python + PySide6 · MIT License</p>",
         )
 
     def closeEvent(self, event: QtGui.QCloseEvent) -> None:
         if self._thread is not None:
             self._thread.request_stop()
-            self._thread.wait(3000)
+            if not self._thread.wait(3000):
+                # 兜底:探测线程 3s 未响应停止(如 RegisterHotKey 异常挂起)。
+                # terminate 不优雅,但好过窗口销毁后线程带着已析构的 parent 继续跑。
+                self._thread.terminate()
+                self._thread.wait(1000)
         self._flush_timer.stop()
         self._fg_timer.stop()
         super().closeEvent(event)

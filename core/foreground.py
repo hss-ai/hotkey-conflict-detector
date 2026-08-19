@@ -10,10 +10,11 @@ Win32 调用一律 ctypes,失败(无前台窗口/Session 0)返回空,不崩溃�
 from __future__ import annotations
 
 import ctypes
+import os
 from ctypes import wintypes
 
 from ._known_data import merged_known_apps
-from .apps import TH32CS_SNAPPROCESS, _PROCESSENTRY32W, _kernel32
+from .apps import _kernel32
 
 
 # ---------------------------------------------------------------------------
@@ -25,26 +26,37 @@ _user32.GetForegroundWindow.restype = wintypes.HWND
 _user32.GetWindowThreadProcessId.argtypes = [wintypes.HWND, ctypes.POINTER(wintypes.DWORD)]
 _user32.GetWindowThreadProcessId.restype = wintypes.DWORD
 
+# 按 PID 直查进程名(避免 toolhelp32 全表扫描——主窗口 3s 轮询一次太浪费)
+_PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
+_kernel32.OpenProcess.argtypes = [wintypes.DWORD, wintypes.BOOL, wintypes.DWORD]
+_kernel32.OpenProcess.restype = wintypes.HANDLE
+_kernel32.QueryFullProcessImageNameW.argtypes = [
+    wintypes.HANDLE, wintypes.DWORD, wintypes.LPWSTR, ctypes.POINTER(wintypes.DWORD),
+]
+_kernel32.QueryFullProcessImageNameW.restype = wintypes.BOOL
+_kernel32.CloseHandle.argtypes = [wintypes.HANDLE]
+_kernel32.CloseHandle.restype = wintypes.BOOL
+
 
 def process_name_by_pid(pid: int) -> str:
-    """通过 PID 查进程可执行文件名(小写);查不到返回空串。"""
+    """按 PID 直接查询进程可执行文件名(小写);查不到返回空串。
+
+    OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION) + QueryFullProcessImageNameW,
+    不做全进程表快照。权限不足(受保护进程)或进程已退出时返回空串。
+    """
     if pid <= 0:
         return ""
-    snapshot = _kernel32.CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0)
-    if not snapshot or snapshot == wintypes.HANDLE(-1).value:
+    handle = _kernel32.OpenProcess(_PROCESS_QUERY_LIMITED_INFORMATION, False, pid)
+    if not handle or handle == wintypes.HANDLE(-1).value:
         return ""
     try:
-        entry = _PROCESSENTRY32W()
-        entry.dwSize = ctypes.sizeof(_PROCESSENTRY32W)
-        if _kernel32.Process32FirstW(snapshot, ctypes.byref(entry)):
-            while True:
-                if entry.th32ProcessID == pid:
-                    return entry.szExeFile.lower()
-                if not _kernel32.Process32NextW(snapshot, ctypes.byref(entry)):
-                    break
+        buf = ctypes.create_unicode_buffer(1024)
+        size = wintypes.DWORD(len(buf))
+        if _kernel32.QueryFullProcessImageNameW(handle, 0, buf, ctypes.byref(size)):
+            return os.path.basename(buf.value).lower()
+        return ""
     finally:
-        _kernel32.CloseHandle(snapshot)
-    return ""
+        _kernel32.CloseHandle(handle)
 
 
 def get_foreground_process() -> tuple[int, str]:

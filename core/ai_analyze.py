@@ -34,12 +34,19 @@ class AiConfig:
     def configured(self) -> bool:
         return bool(self.base_url and self.api_key and self.model)
 
+    @property
+    def is_plain_http(self) -> bool:
+        """base_url 是 http://(明文传输)——UI 据此提示风险,不强制拦截。"""
+        return self.base_url.lower().startswith("http://")
+
     def masked_summary(self) -> str:
-        """脱敏摘要(设置界面展示用,key 只露首尾)。"""
+        """脱敏摘要(设置界面展示用,只露首尾各 2 字符)。"""
         if not self.api_key:
             return "未设置 API Key"
         k = self.api_key
-        return f"{k[:4]}...{k[-4:]}" if len(k) > 8 else "***"
+        if len(k) <= 8:  # 短 key 首尾拼接几乎等于全文,直接打码
+            return "***"
+        return f"{k[:2]}***{k[-2:]}"
 
 
 def ai_config_path():

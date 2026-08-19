@@ -11,6 +11,8 @@ from PySide6 import QtCore, QtWidgets
 
 from core.recommend import recommend_free
 
+from .style import BORDER, SELECT_BG, TEXT_MUTED, TEXT_PRIMARY
+
 
 class RecommendDialog(QtWidgets.QDialog):
     """展示推荐的空闲热键组合。"""
@@ -32,12 +34,12 @@ class RecommendDialog(QtWidgets.QDialog):
             "优先 Ctrl+Alt+字母 → Ctrl+Shift+字母 → …,避开 Win/小键盘。"
         )
         intro.setWordWrap(True)
-        intro.setStyleSheet("color:#6b7480;")
+        intro.setStyleSheet(f"color:{TEXT_MUTED};")
         root.addWidget(intro)
 
         if not self._rec:
             tip = QtWidgets.QLabel("ⓘ 当前没有空闲组合可供推荐。\n请先扫描,或缩小占用范围后再试。")
-            tip.setStyleSheet("padding:24px;color:#6b7480;")
+            tip.setStyleSheet(f"padding:24px;color:{TEXT_MUTED};")
             tip.setAlignment(QtCore.Qt.AlignCenter)
             root.addWidget(tip, 1)
         else:
@@ -47,8 +49,8 @@ class RecommendDialog(QtWidgets.QDialog):
                 item.setToolTip(f"可用 · {r.name}(空闲,可注册)")
                 self._listw.addItem(item)
             self._listw.setStyleSheet(
-                "QListWidget::item{padding:8px 10px;border-bottom:1px solid #e3e7ec;}"
-                "QListWidget::item:selected{background:#dbe7ff;color:#1f2933;}"
+                f"QListWidget::item{{padding:8px 10px;border-bottom:1px solid {BORDER};}}"
+                f"QListWidget::item:selected{{background:{SELECT_BG};color:{TEXT_PRIMARY};}}"
                 "font-family:Consolas,monospace;font-size:14px;"
             )
             root.addWidget(self._listw, 1)

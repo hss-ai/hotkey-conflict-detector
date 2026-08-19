@@ -6,13 +6,14 @@
 Windows 全局热键冲突检测器(Python 3.10+ / PySide6)。用 `RegisterHotKey` 探测法判断哪些全局热键组合被占用,帮助排查快捷键冲突。
 
 ## 架构分层(底线)
-- `core/` 纯检测/数据逻辑,**不依赖 Qt**:`detector` / `apps` / `hotkeys` / `snapshot` / `report` / `recommend` / `foreground` / `watch` / `_known_data` / `_version`。core **不 import ui**(分层底线,HTML 报告等"展示逻辑"也定义自己的配色常量)。
-- `ui/` PySide6 界面:`main_window` + 各 `*_dialog` + `models` / `style`。Win32 调用经 core。
+- `core/` 纯检测/数据逻辑,**不依赖 Qt(不 import ui 也不 import PySide6)**:`detector` / `apps` / `hotkeys` / `snapshot` / `report` / `recommend` / `suspect` / `foreground` / `watch` / `ai_analyze` / `_known_data` / `_version`。ScanThread 已迁至 `ui/scan_thread.py`;HTML 报告等"展示逻辑"定义自己的配色常量。**任何 core 测试文件 import `core.xxx` 都不得拉起 PySide6**(Session 0 CI 依赖此保证)。
+- `ui/` PySide6 界面:`main_window` + 各 `*_dialog` + `models` / `style` / `scan_thread`(扫描 QThread)/ `workers`(通用后台 FnWorker,网络请求防 UI 冻结/防线程被 GC)。Win32 调用经 core。
 - `tests/` 各模块独立单测 + offscreen 冒烟。
 
 ## 测试约定(重要)
 - 风格:`tests/test_xxx.py` 可独立 `python tests/test_xxx.py` 运行,`main()` 返回 0/1,**不用 pytest**。
 - 纯逻辑测试**必须 CI(Session 0)可跑**,不依赖真实 RegisterHotKey;需要真实 Win32 的部分用 monkeypatch 或构造数据。
+- **CI 跑法**:`ci.yml` 的"模块单测"步骤循环跑除 smoke 外的全部 `tests/test_*.py`(core 已零 Qt,Session 0 安全);smoke(需 Qt)单独一步 `continue-on-error`。
 - offscreen:`QT_QPA_PLATFORM=offscreen python tests/test_smoke_offscreen.py`。CI 检测 `CI=true` 走构造数据,本机走真实扫描。
 - 冒烟里每个验证是独立 `_verify_xxx()` 函数 + 在 `main()` 调用,便于聚合与新功能扩展。
 
@@ -41,4 +42,4 @@ Windows 全局热键冲突检测器(Python 3.10+ / PySide6)。用 `RegisterHotKe
 - RegisterHotKey 失败统一返回 1409,**无法区分**被程序注册 / 系统保留 / `WH_KEYBOARD_LL` 钩子占用;来源靠 `core/apps.build_evidence` 尽力推断(置信度标注)。
 - 应用**内部**快捷键(Word 的 Ctrl+B)不占全局槽位,探测不到。
 - 管理员进程占用的热键,非管理员探测可能因 UIPI 误判空闲 → 建议以管理员身份运行。
-- **CI 冒烟测试受限于 Session 0**:GitHub-hosted Windows runner 无交互桌面,`import PySide6`/创建 `QApplication` 原生崩溃,本地无法复现。CI smoke job 设 `continue-on-error`(失败不阻塞),冒烟测试以本地 `QT_QPA_PLATFORM=offscreen python tests/test_smoke_offscreen.py` 为准。
+- **CI 冒烟测试受限于 Session 0**:GitHub-hosted Windows runner 无交互桌面,`import PySide6`/创建 `QApplication` 原生崩溃,本地无法复现。因此**需要 Qt 的测试只进 smoke job**(`continue-on-error`,失败不阻塞);其余纯逻辑单测在"模块单测"步骤跑(core 零 Qt,Session 0 安全,失败阻塞)。冒烟测试以本地 `QT_QPA_PLATFORM=offscreen python tests/test_smoke_offscreen.py` 为准。

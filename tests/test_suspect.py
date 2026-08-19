@@ -91,6 +91,25 @@ def test_rank_empty_and_format() -> None:
     print("[OK] 空候选 + format_suspects 渲染")
 
 
+def test_rank_heuristic_cap_without_exact() -> None:
+    """星级语义:无精确命中的启发式累加封顶 4★——5★ 专属「精确命中默认热键」。"""
+    # uTools:同 VK +2(Ctrl+Alt+U 是其默认键,这里换修饰键)+ 类别基础分 3
+    # 修正前可叠到 5★,修正后封顶 4★(exact_hit=False)
+    combo = HotkeyCombo(vk=0x55, modifiers=MOD_CONTROL | MOD_SHIFT)  # Ctrl+Shift+U
+    running = {"utools.exe", "explorer.exe"}
+    suspects = rank_suspects(combo, running)
+    by_app = {s.app: s for s in suspects}
+    u = by_app["uTools"]
+    assert u.stars == 4, f"无精确命中应封顶 4★,实际 {u.stars}"
+    assert u.exact_hit is False, "未命中默认热键不应标记 exact_hit"
+
+    # 对照:精确命中 + 在运行 → 仍 5★
+    exact = rank_suspects(HotkeyCombo(vk=0x20, modifiers=MOD_ALT), running)
+    top = exact[0]
+    assert top.stars == 5 and top.exact_hit is True, "精确命中+在运行应 5★"
+    print(f"[OK] 星级语义:启发式封顶 4★(uTools={u.star_str}),精确命中 5★({top.app})")
+
+
 # ------------------------------------------------------------- 子模块合并
 def test_rank_group_by_process_owner() -> None:
     """子模块热键(PowerToys Run)与宿主(Microsoft PowerToys)合并为一条。"""

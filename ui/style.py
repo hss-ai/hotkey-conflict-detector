@@ -21,11 +21,35 @@ TEXT_INVERT = "#ffffff"
 ACCENT = "#2563eb"        # 主强调(蓝)
 ACCENT_HOVER = "#1d4ed8"
 ACCENT_PRESSED = "#1e40af"
+ACCENT_DISABLED = "#9db8ef"   # primary 按钮禁用态
+
+DANGER_HOVER = "#b91c1c"      # danger 按钮悬停
+DANGER_DISABLED = "#f0a3a3"   # danger 按钮禁用态
+
+# 选中/表头/滚动条
+SELECT_BG = "#dbe7ff"         # 表格/列表选中背景
+HEADER_BG = "#f7f8fa"         # 表头背景
+SCROLL_HANDLE = "#c8ced6"
+SCROLL_HANDLE_HOVER = "#aeb6c0"
+
+# 信息/建议框(浅蓝底)
+ADVICE_BG = "#f0f5ff"
+ADVICE_BORDER = "#c7d8ff"
+ADVICE_TEXT = "#1e3a8a"
 
 STATUS_FREE = "#16a34a"     # 空闲-绿
 STATUS_OCCUPIED = "#dc2626"  # 已占用-红(冲突)
 STATUS_SYSTEM = "#64748b"    # 系统保留-灰
 STATUS_ERROR = "#d97706"     # 异常-橙
+
+# 证据/检查行符号色(✓ 确认 / △ 部分 / ✗ 不支持 / ? 未知)
+SYM_OK = STATUS_FREE
+SYM_WARN = STATUS_ERROR
+SYM_ERR = STATUS_OCCUPIED
+SYM_NEUTRAL = STATUS_SYSTEM
+SYM_COLORS = {"✓": SYM_OK, "△": SYM_WARN, "✗": SYM_ERR, "?": SYM_NEUTRAL}
+
+TEXT_FAINT = "#888888"      # 注脚/次要说明(比 TEXT_MUTED 更弱)
 
 # 状态 → (前景色, 浅背景色) 用于表格单元格
 STATUS_COLORS = {
@@ -82,7 +106,7 @@ QPushButton#primary {{
 }}
 QPushButton#primary:hover {{ background-color: {ACCENT_HOVER}; border-color: {ACCENT_HOVER}; color: {TEXT_INVERT}; }}
 QPushButton#primary:pressed {{ background-color: {ACCENT_PRESSED}; }}
-QPushButton#primary:disabled {{ background-color: #9db8ef; border-color: #9db8ef; color: {TEXT_INVERT}; }}
+QPushButton#primary:disabled {{ background-color: {ACCENT_DISABLED}; border-color: {ACCENT_DISABLED}; color: {TEXT_INVERT}; }}
 
 QPushButton#danger {{
     background-color: {STATUS_OCCUPIED};
@@ -90,8 +114,8 @@ QPushButton#danger {{
     border: 1px solid {STATUS_OCCUPIED};
     font-weight: 600;
 }}
-QPushButton#danger:hover {{ background-color: #b91c1c; border-color: #b91c1c; }}
-QPushButton#danger:disabled {{ background-color: #f0a3a3; border-color: #f0a3a3; }}
+QPushButton#danger:hover {{ background-color: {DANGER_HOVER}; border-color: {DANGER_HOVER}; }}
+QPushButton#danger:disabled {{ background-color: {DANGER_DISABLED}; border-color: {DANGER_DISABLED}; }}
 
 /* ---------- 输入控件 ---------- */
 QLineEdit, QComboBox, QSpinBox {{
@@ -135,13 +159,13 @@ QTableView {{
     border: 1px solid {BORDER};
     border-radius: 8px;
     gridline-color: {BORDER};
-    selection-background-color: #dbe7ff;
+    selection-background-color: {SELECT_BG};
     selection-color: {TEXT_PRIMARY};
 }}
 QTableView::item {{ padding: 5px 8px; border: none; }}
 QTableView::item:focus {{ outline: none; }}
 QHeaderView::section {{
-    background-color: #f7f8fa;
+    background-color: {HEADER_BG};
     color: {TEXT_MUTED};
     padding: 8px 10px;
     border: none;
@@ -181,11 +205,11 @@ QScrollBar:vertical {{
     margin: 0;
 }}
 QScrollBar::handle:vertical {{
-    background: #c8ced6;
+    background: {SCROLL_HANDLE};
     border-radius: 5px;
     min-height: 30px;
 }}
-QScrollBar::handle:vertical:hover {{ background: #aeb6c0; }}
+QScrollBar::handle:vertical:hover {{ background: {SCROLL_HANDLE_HOVER}; }}
 QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height: 0; }}
 QScrollBar:horizontal {{
     background: transparent;
@@ -193,11 +217,11 @@ QScrollBar:horizontal {{
     margin: 0;
 }}
 QScrollBar::handle:horizontal {{
-    background: #c8ced6;
+    background: {SCROLL_HANDLE};
     border-radius: 5px;
     min-width: 30px;
 }}
-QScrollBar::handle:horizontal:hover {{ background: #aeb6c0; }}
+QScrollBar::handle:horizontal:hover {{ background: {SCROLL_HANDLE_HOVER}; }}
 QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {{ width: 0; }}
 
 /* ---------- 分组框 ---------- */
@@ -218,7 +242,7 @@ QGroupBox::title {{
 
 /* ---------- 提示 ---------- */
 QToolTip {{
-    background-color: #1f2933;
+    background-color: {TEXT_PRIMARY};
     color: {TEXT_INVERT};
     border: none;
     padding: 6px 10px;
@@ -232,4 +256,28 @@ def status_color(status_value: str) -> tuple[str, str]:
     return STATUS_COLORS.get(status_value, (TEXT_MUTED, BG_ALT))
 
 
-__all__ = ["QSS", "status_color", "STATUS_COLORS"]
+__all__ = [
+    "QSS",
+    "status_color",
+    "STATUS_COLORS",
+    "ACCENT_DISABLED",
+    "DANGER_HOVER",
+    "DANGER_DISABLED",
+    "SELECT_BG",
+    "HEADER_BG",
+    "SCROLL_HANDLE",
+    "SCROLL_HANDLE_HOVER",
+    "ADVICE_BG",
+    "ADVICE_BORDER",
+    "ADVICE_TEXT",
+    "STATUS_FREE",
+    "STATUS_OCCUPIED",
+    "STATUS_SYSTEM",
+    "STATUS_ERROR",
+    "SYM_OK",
+    "SYM_WARN",
+    "SYM_ERR",
+    "SYM_NEUTRAL",
+    "SYM_COLORS",
+    "TEXT_FAINT",
+]

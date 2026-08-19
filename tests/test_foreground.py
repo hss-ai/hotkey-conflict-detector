@@ -56,11 +56,20 @@ def test_hint_no_window() -> None:
 
 
 def test_process_name_by_pid_lowercase() -> None:
-    """真实功能:查自身进程名,验证小写化与 PID 查询可用。"""
+    """真实功能:查自身进程名,验证小写化与 PID 直查(OpenProcess 路径)可用。"""
     name = fg.process_name_by_pid(os.getpid())
     assert name and name.islower(), f"应返回小写进程名,实际 {name!r}"
     assert "python" in name, f"自身进程应含 python,实际 {name!r}"
     print(f"[OK] process_name_by_pid(自身 PID)→ {name!r}(已小写)")
+
+
+def test_process_name_by_pid_invalid() -> None:
+    """无效/不存在的 PID:直查安全返回空串(OpenProcess 失败路径不崩)。"""
+    assert fg.process_name_by_pid(0) == ""
+    assert fg.process_name_by_pid(-1) == ""
+    # 0x7FFFFFFF 远超 Windows PID 取值范围,OpenProcess 必失败 → 空串
+    assert fg.process_name_by_pid(0x7FFFFFFF) == ""
+    print("[OK] process_name_by_pid: 无效/超范围 PID → 空串")
 
 
 def main() -> int:
@@ -68,6 +77,7 @@ def main() -> int:
     test_hint_unknown_app()
     test_hint_no_window()
     test_process_name_by_pid_lowercase()
+    test_process_name_by_pid_invalid()
     print("[OK] test_foreground 全部通过")
     return 0
 
