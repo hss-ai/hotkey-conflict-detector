@@ -26,7 +26,11 @@ jobs:
           python-version: '3.11'
 
       # 纯逻辑单测零 Qt,无需安装 PySide6
+      # PYTHONUTF8=1:runner 是 en-US locale,stdout 管道默认 cp1252,
+      # 中文 print 会 UnicodeEncodeError(本地 GBK/UTF-8 环境复现不出来)
       - name: 模块单测(纯逻辑)
+        env:
+          PYTHONUTF8: "1"
         run: |
           Get-ChildItem tests/test_*.py `
             | Where-Object { $_.Name -ne 'test_smoke_offscreen.py' } `
