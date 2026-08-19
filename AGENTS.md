@@ -13,7 +13,8 @@ Windows 全局热键冲突检测器(Python 3.10+ / PySide6)。用 `RegisterHotKe
 ## 测试约定(重要)
 - 风格:`tests/test_xxx.py` 可独立 `python tests/test_xxx.py` 运行,`main()` 返回 0/1,**不用 pytest**。
 - 纯逻辑测试**必须 CI(Session 0)可跑**,不依赖真实 RegisterHotKey;需要真实 Win32 的部分用 monkeypatch 或构造数据。
-- **CI 跑法**:`ci.yml` 的"模块单测"步骤循环跑除 smoke 外的全部 `tests/test_*.py`(core 已零 Qt,Session 0 安全);smoke(需 Qt)单独一步 `continue-on-error`。
+- **CI 跑法**:`ci.yml` 的 unit job 循环跑除 smoke 外的全部 `tests/test_*.py`(core 已零 Qt,Session 0 安全,失败阻塞);smoke(需 Qt)单独 job `continue-on-error`。
+- **CI 编码坑**:GitHub Windows runner 是 en-US locale,Python stdout 管道默认 cp1252,**中文 print 直接 UnicodeEncodeError**(本地 GBK/UTF-8 环境复现不出来,可用 `PYTHONIOENCODING=cp1252` 本地模拟)。CI 跑测试的步骤必须带 `PYTHONUTF8=1`。
 - offscreen:`QT_QPA_PLATFORM=offscreen python tests/test_smoke_offscreen.py`。CI 检测 `CI=true` 走构造数据,本机走真实扫描。
 - 冒烟里每个验证是独立 `_verify_xxx()` 函数 + 在 `main()` 调用,便于聚合与新功能扩展。
 
